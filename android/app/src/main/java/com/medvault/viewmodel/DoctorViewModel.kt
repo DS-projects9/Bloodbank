@@ -81,16 +81,20 @@ class DoctorViewModel @Inject constructor(
         }
     }
 
-    fun publishNextWeek() {
+    fun publishNextWeek(slots: List<SlotUpdate>) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 val nextMonday = LocalDate.now().with(DayOfWeek.MONDAY).plusWeeks(1)
                 val response = apiClient.doctorApi.publishNextWeek(
-                    PublishNextWeekRequest(weekStart = nextMonday.toString())
+                    PublishNextWeekRequest(weekStart = nextMonday.toString(), slots = slots)
                 )
                 val count = (response.data?.get("slotsCreated") as? Number)?.toInt() ?: 0
-                _uiState.value = _uiState.value.copy(isLoading = false, publishedSlotCount = count)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    publishedSlotCount = count,
+                    error = null
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }

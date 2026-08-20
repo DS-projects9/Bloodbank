@@ -23,7 +23,8 @@ data class UpdateDoctorScheduleRequest(
 )
 
 data class PublishNextWeekRequest(
-    val weekStart: String
+    val weekStart: String,
+    val slots: List<SlotUpdate>? = null
 )
 
 interface DoctorApi {

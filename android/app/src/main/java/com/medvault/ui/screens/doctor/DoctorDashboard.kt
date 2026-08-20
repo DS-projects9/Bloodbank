@@ -598,39 +598,41 @@ fun DoctorDashboard(
                     // Publish Button
                     Button(
                         onClick = {
-                            val slots = try {
-                                val from = if (fromDate.isNotBlank()) dateFormat.parse(fromDate) else null
-                                val to = if (toDate.isNotBlank()) dateFormat.parse(toDate) else null
-                                if (from != null && to != null) {
-                                    val result = mutableListOf<SlotUpdate>()
+                            val template = try {
+                                val days = if (fromDate.isNotBlank() && toDate.isNotBlank()) {
+                                    val from = dateFormat.parse(fromDate)
+                                    val to = dateFormat.parse(toDate)
                                     val cal = Calendar.getInstance().apply { time = from }
+                                    val set = mutableSetOf<String>()
                                     while (!cal.after(to)) {
                                         val dow = cal.get(Calendar.DAY_OF_WEEK)
                                         if (dow in Calendar.MONDAY..Calendar.FRIDAY) {
-                                            val dayName = cal.getDisplayName(
+                                            cal.getDisplayName(
                                                 Calendar.DAY_OF_WEEK, Calendar.LONG, Locale.US
-                                            )?.lowercase() ?: ""
-                                            result.add(
-                                                SlotUpdate(
-                                                    day = dayName,
-                                                    startTime = startTime,
-                                                    endTime = endTime,
-                                                    slotMinutes = intervalMinutes
-                                                )
-                                            )
+                                            )?.lowercase()?.let { set.add(it) }
                                         }
                                         cal.add(Calendar.DAY_OF_MONTH, 1)
                                     }
-                                    result
-                                } else emptyList()
+                                    set.toList()
+                                } else {
+                                    listOf("monday", "tuesday", "wednesday", "thursday", "friday")
+                                }
+                                days.map { day ->
+                                    SlotUpdate(
+                                        day = day,
+                                        startTime = startTime,
+                                        endTime = endTime,
+                                        slotMinutes = intervalMinutes
+                                    )
+                                }
                             } catch (_: Exception) {
                                 emptyList()
                             }
 
-                            if (slots.isNotEmpty()) {
-                                viewModel.updateSchedule(slots)
+                            if (template.isNotEmpty()) {
+                                viewModel.updateSchedule(template)
+                                viewModel.publishNextWeek(template)
                             }
-                            viewModel.publishNextWeek()
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -645,6 +647,15 @@ fun DoctorDashboard(
                             text = "Publish Slots for Patient Booking",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    uiState.error?.let { err ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = err,
+                            fontSize = 13.sp,
+                            color = Color.Red
                         )
                     }
 

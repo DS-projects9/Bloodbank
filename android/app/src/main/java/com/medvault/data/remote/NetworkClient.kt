@@ -21,20 +21,31 @@ object ApiConfig {
     const val BASE_URL = DEVICE_LOCAL_URL
 }
 
-private suspend fun FirebaseAuth.getIdToken(): String? {
+object TokenCache {
+    @Volatile
+    var token: String? = null
+        private set
+
+    fun update(value: String?) {
+        token = value
+    }
+}
+
+private suspend fun FirebaseAuth.refreshIdToken(force: Boolean = false): String? {
     val user = this.currentUser ?: return null
     return suspendCoroutine { cont ->
-        user.getIdToken(false)
-            .addOnSuccessListener { result: GetTokenResult -> cont.resume(result.token) }
+        user.getIdToken(force)
+            .addOnSuccessListener { result: GetTokenResult ->
+                TokenCache.update(result.token)
+                cont.resume(result.token)
+            }
             .addOnFailureListener { cont.resume(null) }
     }
 }
 
 class AuthInterceptor(private val auth: FirebaseAuth) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): okhttp3.Response {
-        val token = runBlocking {
-            auth.getIdToken()
-        }
+        val token = TokenCache.token ?: runBlocking { auth.refreshIdToken() } ?: TokenCache.token
         val request = chain.request().newBuilder().apply {
             if (token != null) {
                 addHeader("Authorization", "Bearer $token")

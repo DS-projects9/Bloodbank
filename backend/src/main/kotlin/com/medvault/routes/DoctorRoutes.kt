@@ -167,34 +167,45 @@ fun Route.doctorRoutes() {
         val auth = call.requireAuth()
         val req = call.receive<PublishNextWeekRequest>()
 
-        val config = FirestoreAdapter.get<Map<String, Any?>>("schedule_config", auth.uid)
-            ?: throw IllegalStateException("No schedule configured")
+        val slotConfigs: List<Map<String, Any?>> = req.slots?.map { slot ->
+            mapOf(
+                "day" to slot.day,
+                "startTime" to slot.startTime,
+                "endTime" to slot.endTime,
+                "slotMinutes" to slot.slotMinutes,
+            )
+        } ?: run {
+            val config = FirestoreAdapter.get<Map<String, Any?>>("schedule_config", auth.uid)
+                ?: throw IllegalStateException("No schedule configured")
+            (config["slots"] as? List<*>) ?: emptyList<Any?>()
+        }
 
-        val slots = config["slots"] as? List<*> ?: emptyList<Any?>()
         val weekStart = java.time.LocalDate.parse(req.weekStart)
 
-        val batch = com.medvault.config.FirebaseProvider.firestore().batch()
+        val firestore = com.medvault.config.FirebaseProvider.firestore()
+        var batch = firestore.batch()
         var count = 0
+        var ops = 0
 
         for (dayOffset in 0..6) {
             val date = weekStart.plusDays(dayOffset.toLong())
             val dayName = date.dayOfWeek.name
 
-            val matchingSlots = slots.filter { (it as? Map<*, *>)?.get("day") == dayName }
+            val matchingSlots = slotConfigs.filter { (it as? Map<*, *>)?.get("day") == dayName }
 
             for (slotConfig in matchingSlots) {
                 val slotMap = slotConfig as? Map<*, *> ?: continue
                 val startTime = slotMap["startTime"] as? String ?: continue
                 val endTime = slotMap["endTime"] as? String ?: continue
                 val slotMinutes = (slotMap["slotMinutes"] as? Number)?.toInt() ?: 30
+                if (slotMinutes <= 0) continue
 
                 val startMinutes = parseTimeToMinutes(startTime)
                 val endMinutes = parseTimeToMinutes(endTime)
 
                 var current = startMinutes
                 while (current + slotMinutes <= endMinutes) {
-                    val slotRef = com.medvault.config.FirebaseProvider.firestore()
-                        .collection("slots").document()
+                    val slotRef = firestore.collection("slots").document()
                     batch.set(slotRef, mapOf(
                         "slotId" to slotRef.id,
                         "doctorUid" to auth.uid,
@@ -206,18 +217,31 @@ fun Route.doctorRoutes() {
                     ))
                     current += slotMinutes
                     count++
+                    ops++
+                    if (ops >= 450) {
+                        batch.commit().get()
+                        batch = firestore.batch()
+                        ops = 0
+                    }
                 }
             }
         }
-        batch.commit().get()
+        if (ops > 0) batch.commit().get()
 
         call.respond(success(SlotsCreatedResponse(slotsCreated = count)))
     }
 }
 
 private fun parseTimeToMinutes(time: String): Int {
-    val parts = time.split(":")
-    return parts[0].toInt() * 60 + parts[1].toInt()
+    val parts = time.trim().split(":")
+    if (parts.size < 2) return 0
+    val hour = parts[0].toIntOrNull() ?: 0
+    val minutePart = parts[1]
+    val isPm = minutePart.contains("PM", ignoreCase = true)
+    val minute = minutePart.replace(Regex("(?i)[^0-9]"), "").toIntOrNull() ?: 0
+    var h = hour % 12
+    if (isPm) h += 12
+    return h * 60 + minute
 }
 
 private fun minutesToTime(minutes: Int): String {

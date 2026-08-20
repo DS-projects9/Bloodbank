@@ -18,4 +18,5 @@ data class UpdateDoctorScheduleRequest(
 @Serializable
 data class PublishNextWeekRequest(
     val weekStart: String,
+    val slots: List<SlotUpdate>? = null,
 )
