@@ -1,0 +1,9 @@
+.gradle
+node_modules
+npm-debug.log
+.env
+fake-service-account.json
+.git
+.gitignore
+*.iml
+.DS_Store

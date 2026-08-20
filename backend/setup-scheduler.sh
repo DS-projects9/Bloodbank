@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Creates a Cloud Scheduler job that periodically triggers the backend's
+# /api/v1/cron/run endpoint (auto-expiry of slots, blood requests, vault docs).
+#
+# Usage:
+#   ./setup-scheduler.sh [REGION] [PROJECT]
+#
+# Requires:
+#   - The Cloud Run service deployed (see deploy.sh)
+#   - Secret Manager secret: medvault-cron-secret (the CRON_SECRET value)
+#   - A small Pub/Sub topic or the Cloud Run invoker permission for the
+#     scheduler service account.
+
+set -euo pipefail
+
+REGION="${1:-asia-south1}"
+PROJECT="${2:-medvault-11c68}"
+SERVICE="medvault-backend"
+TOPIC="medvault-cron"
+CRON_SECRET_NAME="medvault-cron-secret"
+
+SERVICE_URL=$(gcloud run services describe "${SERVICE}" --region="${REGION}" --format='value(status.url)')
+CRON_SECRET=$(gcloud secrets versions access latest --secret="${CRON_SECRET_NAME}" --project="${PROJECT}")
+
+echo ">> Service URL: ${SERVICE_URL}"
+
+# Create a Pub/Sub topic for the scheduler to publish to (optional bridge).
+gcloud pubsub topics create "${TOPIC}" --project="${PROJECT}" 2>/dev/null || true
+
+# Create (or update) the scheduled job: every minute.
+gcloud scheduler jobs create http medvault-cron-job \
+  --location="${REGION}" \
+  --schedule="* * * * *" \
+  --uri="${SERVICE_URL}/api/v1/cron/run?secret=${CRON_SECRET}" \
+  --http-method=POST \
+  --oidc-service-account-email="medvault-backend@${PROJECT}.iam.gserviceaccount.com" \
+  --project="${PROJECT}" 2>/dev/null \
+  || gcloud scheduler jobs update http medvault-cron-job \
+       --location="${REGION}" \
+       --schedule="* * * * *" \
+       --uri="${SERVICE_URL}/api/v1/cron/run?secret=${CRON_SECRET}" \
+       --http-method=POST \
+       --oidc-service-account-email="medvault-backend@${PROJECT}.iam.gserviceaccount.com" \
+       --project="${PROJECT}"
+
+echo ">> Scheduler job 'medvault-cron-job' configured (every minute)."

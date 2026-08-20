@@ -1,0 +1,8 @@
+# Local-only Dockerfile: packages the already-built fat jar (no Gradle build).
+# Use: docker build -f Dockerfile.local -t medvault-backend:local .
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY build/libs/medvault-backend-1.0.0-all.jar app.jar
+EXPOSE 8080
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

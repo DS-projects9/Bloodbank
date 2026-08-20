@@ -1,0 +1,19 @@
+{
+  "name": "medvault",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MedVault — DPDP-compliant health records (monorepo: app + functions).",
+  "scripts": {
+    "typecheck": "npm --prefix functions run lint && npm --prefix app run typecheck",
+    "lint": "npm --prefix functions run lint && npm --prefix app run lint",
+    "build": "npm --prefix functions run build",
+    "ci": "npm run typecheck && npm run lint",
+    "deploy:firebase": "firebase deploy --only functions,firestore:rules,storage:rules"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.2.0"
+  }
+}
