@@ -135,13 +135,15 @@ class PatientViewModel @Inject constructor(
         }
     }
 
-    fun updateEmergencyContacts(contacts: List<EmergencyContact>) {
+    fun updateEmergencyContacts(contacts: List<EmergencyContact>, onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             try {
                 apiClient.userApi.updateContacts(UpdateContactsRequest(emergencyContacts = contacts))
                 _uiState.value = _uiState.value.copy(emergencyContacts = contacts)
+                onComplete(true)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
+                onComplete(false)
             }
         }
     }

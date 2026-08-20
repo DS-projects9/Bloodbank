@@ -1,6 +1,7 @@
 package com.medvault.ui.screens.patient
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -21,9 +22,17 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.Manifest
+import android.net.Uri
 import android.provider.ContactsContract
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import com.medvault.data.remote.EmergencyContact
 import com.medvault.ui.theme.*
+import com.medvault.viewmodel.AuthViewModel
 import com.medvault.viewmodel.PatientViewModel
 
 @Composable
@@ -41,6 +50,40 @@ fun PatientDashboard(
     val context = LocalContext.current
     var donorOptIn by remember { mutableStateOf(false) }
     var selectedNavIndex by remember { mutableIntStateOf(0) }
+
+    val pickContactLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
+        if (uri != null) {
+            val (name, phone) = resolveContact(context, uri)
+            if (name.isNotBlank()) {
+                val current = viewModel.uiState.value.emergencyContacts
+                val updated = current + EmergencyContact(
+                    name = name, phone = phone, relationship = "Emergency"
+                )
+                viewModel.updateEmergencyContacts(updated) { success ->
+                    Toast.makeText(
+                        context,
+                        if (success) "Emergency contact added" else "Failed to save contact. Check your connection.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } else {
+                Toast.makeText(context, "Could not read the selected contact", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val contactPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            pickContactLauncher.launch(Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI))
+        } else {
+            Toast.makeText(context, "Contacts permission is required to add emergency contacts", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -355,11 +398,15 @@ fun PatientDashboard(
 
             Button(
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, ContactsContract.Contacts.CONTENT_URI)
-                    try {
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Unable to open contacts", Toast.LENGTH_SHORT).show()
+                    when {
+                        ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.READ_CONTACTS
+                        ) == PackageManager.PERMISSION_GRANTED ->
+                            pickContactLauncher.launch(
+                                Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
+                            )
+                        else ->
+                            contactPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -458,20 +505,69 @@ private fun EmergencyContactCard(
                 )
             }
 
+            val ctx = LocalContext.current
             Box(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(SuccessGreen),
+                    .background(SuccessGreen)
+                    .clickable(enabled = phone.isNotBlank()) {
+                        ctx.startActivity(
+                            Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(phone, "+")}"))
+                        )
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Default.Phone,
-                    contentDescription = "Call",
+                    contentDescription = "Call $phone",
                     tint = White,
                     modifier = Modifier.size(18.dp)
                 )
             }
         }
     }
+}
+
+private fun resolveContact(context: android.content.Context, uri: Uri): Pair<String, String> {
+    val cr = context.contentResolver
+    var name = ""
+    var phone = ""
+    cr.query(
+        uri,
+        arrayOf(
+            ContactsContract.Contacts._ID,
+            ContactsContract.Contacts.DISPLAY_NAME,
+            ContactsContract.Contacts.HAS_PHONE_NUMBER
+        ),
+        null, null, null
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            name = cursor.getString(
+                cursor.getColumnIndexOrThrow(ContactsContract.Contacts.DISPLAY_NAME)
+            ) ?: ""
+            val hasPhone = cursor.getInt(
+                cursor.getColumnIndexOrThrow(ContactsContract.Contacts.HAS_PHONE_NUMBER)
+            ) > 0
+            if (hasPhone) {
+                val id = cursor.getString(
+                    cursor.getColumnIndexOrThrow(ContactsContract.Contacts._ID)
+                )
+                cr.query(
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                    "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+                    arrayOf(id),
+                    null
+                )?.use { pc ->
+                    if (pc.moveToFirst()) {
+                        phone = pc.getString(
+                            pc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                        ) ?: ""
+                    }
+                }
+            }
+        }
+    }
+    return name to phone
 }
