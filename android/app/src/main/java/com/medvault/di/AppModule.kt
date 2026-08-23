@@ -1,8 +1,5 @@
 package com.medvault.di
 
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
 import com.medvault.data.remote.ApiClient
 import dagger.Module
 import dagger.Provides
@@ -16,17 +13,5 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()
-
-    @Provides
-    @Singleton
-    fun provideFirebaseFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
-
-    @Provides
-    @Singleton
-    fun provideFirebaseStorage(): FirebaseStorage = FirebaseStorage.getInstance()
-
-    @Provides
-    @Singleton
-    fun provideApiClient(auth: FirebaseAuth): ApiClient = ApiClient(auth)
+    fun provideApiClient(): ApiClient = ApiClient()
 }

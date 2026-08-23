@@ -29,6 +29,8 @@ import com.medvault.viewmodel.DoctorViewModel
 fun DoctorProfileScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
+    onShiftSchedule: () -> Unit = {},
+    onNavigateToQueue: () -> Unit = {},
     viewModel: DoctorViewModel = hiltViewModel(),
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
@@ -65,7 +67,7 @@ fun DoctorProfileScreen(
                         icon = { Icon(Icons.Default.CalendarMonth, contentDescription = "Appointments") },
                         label = { Text("Appointments") },
                         selected = selectedNavIndex == 1,
-                        onClick = { },
+                        onClick = { onNavigateToQueue() },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = PrimaryBlue,
                             selectedTextColor = PrimaryBlue,
@@ -103,8 +105,8 @@ fun DoctorProfileScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { }) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu", tint = DarkText)
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = DarkText)
                     }
                     Text(
                         text = "Doctor Profile",
@@ -112,9 +114,7 @@ fun DoctorProfileScreen(
                         fontWeight = FontWeight.Bold,
                         color = DarkText
                     )
-                    IconButton(onClick = { }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = PrimaryBlue)
-                    }
+                    Spacer(modifier = Modifier.size(48.dp))
                 }
 
                 Column(
@@ -159,12 +159,14 @@ fun DoctorProfileScreen(
                                         color = DarkText
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        Icons.Default.Verified,
-                                        contentDescription = "Verified",
-                                        tint = SuccessGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    if (uiState.profile?.get("verified") == true || uiState.profile?.get("isVerified") == true) {
+                                        Icon(
+                                            Icons.Default.Verified,
+                                            contentDescription = "Verified",
+                                            tint = SuccessGreen,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                                 Text(
                                     text = uiState.profile?.get("specialization") as? String ?: "",
@@ -188,19 +190,26 @@ fun DoctorProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        val profile = uiState.profile
+                        val yearsExp = (profile?.get("yearsExperience") as? Number)?.toInt()
+                        val rating = (profile?.get("rating") as? Number)
+                        val consults = (profile?.get("consultCount") as? Number)?.toInt()
+                        val dept = profile?.get("department") as? String
+                        val room = profile?.get("roomNumber") as? String
+
                         StatBox(
-                            value = "12+ Yrs",
+                            value = if (yearsExp != null && yearsExp > 0) "$yearsExp+ Yrs" else "—",
                             label = "Experience",
                             modifier = Modifier.weight(1f)
                         )
                         StatBox(
-                            value = "4.9",
+                            value = if (rating != null) "%.1f".format(rating.toDouble()) else "—",
                             label = "Rating",
-                            valueColor = WarningOrange,
+                            valueColor = if (rating != null) WarningOrange else MutedText,
                             modifier = Modifier.weight(1f)
                         )
                         StatBox(
-                            value = "1,240+",
+                            value = if (consults != null && consults > 0) "$consults+" else "—",
                             label = "Consults",
                             modifier = Modifier.weight(1f)
                         )
@@ -235,12 +244,12 @@ fun DoctorProfileScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column {
-                                    Text(text = "Department", fontSize = 12.sp, color = MutedText)
-                                    Text(text = "Cardiology (OPD 3)", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
+                                    Text(text = "Specialization", fontSize = 12.sp, color = MutedText)
+                                    Text(text = uiState.profile?.get("specialization") as? String ?: "—", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
                                 }
                                 Column {
                                     Text(text = "Room / Cabin", fontSize = 12.sp, color = MutedText)
-                                    Text(text = "Cabin 302", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
+                                    Text(text = uiState.profile?.get("roomNumber") as? String ?: "—", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
                                 }
                             }
 
@@ -282,17 +291,8 @@ fun DoctorProfileScreen(
                         Column {
                             SettingsRow(
                                 icon = Icons.Default.Schedule,
-                                title = "Shift Schedule & Default Timings"
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                            SettingsRow(
-                                icon = Icons.Default.History,
-                                title = "Time-Boxed Vault Audit Log"
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                            SettingsRow(
-                                icon = Icons.Default.ContactPhone,
-                                title = "Emergency Contact & Hospital Admin"
+                                title = "Shift Schedule & Default Timings",
+                                onClick = onShiftSchedule
                             )
                         }
                     }
@@ -361,12 +361,13 @@ private fun StatBox(
 @Composable
 private fun SettingsRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String
+    title: String,
+    onClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { }
+            .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

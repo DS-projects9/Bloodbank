@@ -1,6 +1,8 @@
 package com.medvault.ui.screens.bloodbank
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,8 +30,10 @@ fun RequestBloodScreen(
 
     var selectedBloodGroup by remember { mutableStateOf<String?>(null) }
     var units by remember { mutableIntStateOf(1) }
+    var selectedUrgency by remember { mutableStateOf("Normal") }
 
     val bloodGroups = listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
+    val urgencyOptions = listOf("Normal", "Urgent", "Critical")
 
     if (uiState.isLoading) {
         Box(
@@ -166,16 +170,57 @@ fun RequestBloodScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Urgency
+                    Text(
+                        text = "Urgency Level",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = SecondaryText
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        urgencyOptions.forEach { level ->
+                            val isSelected = selectedUrgency == level
+                            val chipColor = when (level) {
+                                "Critical" -> EmergencyRed
+                                "Urgent" -> WarningOrange
+                                else -> SuccessGreen
+                            }
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { selectedUrgency = level },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) chipColor else White,
+                                border = BorderStroke(1.dp, if (isSelected) chipColor else BorderColor)
+                            ) {
+                                Text(
+                                    text = level,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (isSelected) White else DarkText,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     // Submit Button
                     Button(
                         onClick = {
                             viewModel.createBloodRequest(
-                                patientName = (uiState.profile?.get("full_name") as? String) ?: "Unknown",
+                                patientName = (uiState.profile?.get("name") as? String) ?: (uiState.profile?.get("full_name") as? String) ?: "Unknown",
                                 bloodGroup = selectedBloodGroup ?: "",
                                 units = units,
-                                hospitalName = (uiState.profile?.get("hospital_name") as? String) ?: "",
-                                hospitalAddress = (uiState.profile?.get("hospital_address") as? String) ?: "",
-                                urgency = "Normal"
+                                hospitalName = (uiState.profile?.get("hospitalName") as? String) ?: (uiState.profile?.get("hospital_name") as? String) ?: "",
+                                hospitalAddress = (uiState.profile?.get("bankAddress") as? String) ?: (uiState.profile?.get("hospital_address") as? String) ?: "",
+                                urgency = selectedUrgency
                             )
                         },
                         modifier = Modifier

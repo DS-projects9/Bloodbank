@@ -54,6 +54,11 @@ fun PatientProfileScreen(
     var editBloodGroup by remember { mutableStateOf(bloodGroup) }
     var editCity by remember { mutableStateOf(city) }
 
+    var showDeleteOptions by remember { mutableStateOf(false) }
+    var deleteChoice by remember { mutableStateOf<DeleteChoice?>(null) }
+    var isDeleting by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -259,6 +264,32 @@ fun PatientProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Data & Privacy
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = White),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Data & Privacy",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkText
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SettingsItem(
+                        icon = Icons.Default.Delete,
+                        title = "Delete Account",
+                        titleColor = MaterialTheme.colorScheme.error,
+                        onClick = { showDeleteOptions = true }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Button(
                 onClick = {
                     authViewModel.signOut()
@@ -277,7 +308,118 @@ fun PatientProfileScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
+
+    // Step 1: choose what to delete
+    if (showDeleteOptions) {
+        AlertDialog(
+            onDismissRequest = { showDeleteOptions = false },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Delete account data") },
+            text = {
+                Text(
+                    "We're sorry to see you go. Choose what you'd like to remove. " +
+                        "You can delete only the medical reports we've stored, or erase your entire account."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteChoice = DeleteChoice.Reports
+                    showDeleteOptions = false
+                }) {
+                    Text("Delete my reports")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    deleteChoice = DeleteChoice.Account
+                    showDeleteOptions = false
+                }) {
+                    Text("Delete my account", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        )
+    }
+
+    // Step 2: confirm the chosen action
+    deleteChoice?.let { choice ->
+        val isAccount = choice == DeleteChoice.Account
+        AlertDialog(
+            onDismissRequest = { if (!isDeleting) deleteChoice = null },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text(if (isAccount) "Delete entire account?" else "Delete all reports?") },
+            text = {
+                Text(
+                    if (isAccount)
+                        "This permanently deletes your account, profile, all stored reports and every related record. This cannot be undone."
+                    else
+                        "This permanently deletes all medical reports we've stored for you. Your account stays active. This cannot be undone."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isDeleting = true
+                        deleteError = null
+                        if (isAccount) {
+                            viewModel.deleteAccount { ok, err ->
+                                isDeleting = false
+                                if (ok) {
+                                    deleteChoice = null
+                                    authViewModel.signOut()
+                                    onLogout()
+                                } else {
+                                    deleteError = err ?: "Failed to delete account"
+                                }
+                            }
+                        } else {
+                            viewModel.deleteReports { ok, err ->
+                                isDeleting = false
+                                if (ok) {
+                                    deleteChoice = null
+                                } else {
+                                    deleteError = err ?: "Failed to delete reports"
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isDeleting,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    if (isDeleting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(if (isAccount) "Delete account" else "Delete reports")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteChoice = null }, enabled = !isDeleting) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Error feedback
+    deleteError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { deleteError = null },
+            title = { Text("Something went wrong") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { deleteError = null }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
 }
+
+private enum class DeleteChoice { Reports, Account }
 
 @Composable
 private fun ProfileInfoRow(label: String, value: String) {
@@ -303,6 +445,7 @@ private fun ProfileInfoRow(label: String, value: String) {
 private fun SettingsItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
+    titleColor: androidx.compose.ui.graphics.Color = DarkText,
     onClick: () -> Unit = {}
 ) {
     Row(
@@ -322,7 +465,7 @@ private fun SettingsItem(
         Text(
             text = title,
             fontSize = 16.sp,
-            color = DarkText
+            color = titleColor
         )
         Spacer(modifier = Modifier.weight(1f))
         Icon(

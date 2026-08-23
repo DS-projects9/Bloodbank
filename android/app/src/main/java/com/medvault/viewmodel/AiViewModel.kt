@@ -2,13 +2,14 @@ package com.medvault.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
 import com.medvault.data.remote.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import retrofit2.HttpException
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 
 data class AiChatMessage(
@@ -27,25 +28,32 @@ data class AiUiState(
 @HiltViewModel
 class AiViewModel @Inject constructor(
     private val apiClient: ApiClient,
-    private val auth: FirebaseAuth
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AiUiState())
     val uiState: StateFlow<AiUiState> = _uiState.asStateFlow()
 
     fun sendMessage(message: String) {
+        if (_uiState.value.isLoading) return
+
+        // First message of a (server-confirmed) session goes through /analyze;
+        // follow-ups use /chat. Keying off sessionId rather than message count
+        // so a failed first attempt retries cleanly instead of hitting /chat
+        // with a session that doesn't exist yet.
+        val isNewSession = _uiState.value.sessionId == null
         val sessionId = _uiState.value.sessionId
             ?: java.util.UUID.randomUUID().toString()
 
         val userMsg = AiChatMessage(role = "user", content = message)
         _uiState.value = _uiState.value.copy(
             messages = _uiState.value.messages + userMsg,
-            isLoading = true
+            isLoading = true,
+            error = null
         )
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = if (_uiState.value.messages.size <= 1) {
+                val response = if (isNewSession) {
                     apiClient.aiApi.analyze(
                         AiAnalyzeRequest(
                             sessionId = sessionId,
@@ -66,8 +74,29 @@ class AiViewModel @Inject constructor(
                     isLoading = false
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = friendlyAiError(e)
+                )
             }
+        }
+    }
+
+    private fun friendlyAiError(e: Throwable): String {
+        val httpCode = (e as? HttpException)?.code()
+        if (httpCode == 409 || httpCode == 429 || httpCode == 503) {
+            return "AI service is unavailable right now (rate limited). Please try again in a moment."
+        }
+        val msg = e.message?.lowercase() ?: ""
+        return when {
+            msg.contains("session not found") ->
+                "Chat session expired. Please send your message again."
+            msg.contains("llm provider error") || msg.contains("api key") ->
+                "AI service is unavailable right now. Please try again later."
+            msg.contains("network") || msg.contains("timeout") || msg.contains("connection") ||
+                msg.contains("failed to connect") || msg.contains("unexpected end") ->
+                "Network error. Please check your connection and try again."
+            else -> e.message ?: "Something went wrong. Please try again."
         }
     }
 

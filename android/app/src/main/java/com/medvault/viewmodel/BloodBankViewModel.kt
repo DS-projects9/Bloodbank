@@ -2,13 +2,13 @@ package com.medvault.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
 import com.medvault.data.remote.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 
 data class BloodBankUiState(
@@ -25,7 +25,6 @@ data class BloodBankUiState(
 @HiltViewModel
 class BloodBankViewModel @Inject constructor(
     private val apiClient: ApiClient,
-    private val auth: FirebaseAuth
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BloodBankUiState())
@@ -39,7 +38,7 @@ class BloodBankViewModel @Inject constructor(
     }
 
     fun loadProfile() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 val response = apiClient.userApi.getMe()
@@ -54,7 +53,7 @@ class BloodBankViewModel @Inject constructor(
     }
 
     fun loadInventory() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val response = apiClient.bloodApi.getMyInventory()
                 _uiState.value = _uiState.value.copy(inventory = response.data)
@@ -64,12 +63,32 @@ class BloodBankViewModel @Inject constructor(
         }
     }
 
-    fun adjustInventory(bloodGroup: String, units: Int, reason: String) {
-        viewModelScope.launch {
+    fun adjustInventory(
+        bloodGroup: String,
+        units: Int,
+        reason: String,
+        expiryDate: String? = null,
+        vaultLocation: String? = null,
+        collectionDate: String? = null,
+        volumePerUnit: Double? = null,
+        storageTemp: String? = null,
+        notes: String? = null,
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 apiClient.bloodApi.adjustInventory(
-                    BloodInventoryAdjustRequest(bloodGroup = bloodGroup, units = units, reason = reason)
+                    BloodInventoryAdjustRequest(
+                        bloodGroup = bloodGroup,
+                        units = units,
+                        reason = reason,
+                        expiryDate = expiryDate,
+                        vaultLocation = vaultLocation,
+                        collectionDate = collectionDate,
+                        volumePerUnit = volumePerUnit,
+                        storageTemp = storageTemp,
+                        notes = notes,
+                    )
                 )
                 _uiState.value = _uiState.value.copy(isLoading = false)
                 loadInventory()
@@ -80,7 +99,7 @@ class BloodBankViewModel @Inject constructor(
     }
 
     fun loadBloodRequests() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val response = apiClient.bloodApi.getNearbyRequests()
                 _uiState.value = _uiState.value.copy(bloodRequests = response.data ?: emptyList())
@@ -91,7 +110,7 @@ class BloodBankViewModel @Inject constructor(
     }
 
     fun fulfillBloodRequest(requestId: String, units: Int) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 apiClient.bloodApi.fulfillBloodRequest(
@@ -106,8 +125,19 @@ class BloodBankViewModel @Inject constructor(
         }
     }
 
+    fun declineBloodRequest(requestId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                apiClient.bloodApi.declineBloodRequest(BloodRequestCancelRequest(requestId = requestId))
+                loadBloodRequests()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message)
+            }
+        }
+    }
+
     fun loadDonorBookings() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val response = apiClient.bloodApi.getUpcomingDonorBookings()
                 _uiState.value = _uiState.value.copy(donorBookings = response.data ?: emptyList())
@@ -118,7 +148,7 @@ class BloodBankViewModel @Inject constructor(
     }
 
     fun loadUpcomingDonations() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val response = apiClient.bloodApi.getUpcomingDonations()
                 _uiState.value = _uiState.value.copy(upcomingDonations = response.data ?: emptyList())
@@ -129,9 +159,20 @@ class BloodBankViewModel @Inject constructor(
     }
 
     fun cancelDonorBooking(bookingId: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                apiClient.bloodApi.cancelDonorBooking(mapOf("bookingId" to bookingId))
+                apiClient.bloodApi.cancelDonorBooking(DonorBookingCancelRequest(bookingId = bookingId))
+                loadDonorBookings()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message)
+            }
+        }
+    }
+
+    fun checkInDonorBooking(bookingId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                apiClient.bloodApi.checkInDonorBooking(DonorBookingCancelRequest(bookingId = bookingId))
                 loadDonorBookings()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
@@ -143,7 +184,7 @@ class BloodBankViewModel @Inject constructor(
         patientName: String, bloodGroup: String, units: Int,
         hospitalName: String, hospitalAddress: String, urgency: String
     ) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 apiClient.bloodApi.createBloodRequest(

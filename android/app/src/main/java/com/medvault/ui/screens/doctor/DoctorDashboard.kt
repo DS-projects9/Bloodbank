@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,7 +38,6 @@ fun DoctorDashboard(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    var isOnline by remember { mutableStateOf(true) }
     var fromDate by remember { mutableStateOf("") }
     var toDate by remember { mutableStateOf("") }
     var startTime by remember { mutableStateOf("09:00 AM") }
@@ -45,6 +45,9 @@ fun DoctorDashboard(
     var selectedInterval by remember { mutableStateOf("20m") }
     var selectedNavIndex by remember { mutableIntStateOf(0) }
     var breakSlots by remember { mutableStateOf(setOf<String>()) }
+
+    val allDays = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    var selectedDays by remember { mutableStateOf(setOf("monday", "tuesday", "wednesday", "thursday", "friday")) }
 
     var showFromDatePicker by remember { mutableStateOf(false) }
     var showToDatePicker by remember { mutableStateOf(false) }
@@ -56,10 +59,15 @@ fun DoctorDashboard(
             (config["startTime"] as? String)?.let { startTime = it }
             (config["endTime"] as? String)?.let { endTime = it }
             (config["slotMinutes"] as? Number)?.let { selectedInterval = "${it.toInt()}m" }
+            val savedDays = (config["slots"] as? List<*>)?.mapNotNull { (it as? Map<*, *>)?.get("day")?.toString()?.lowercase() }?.toSet()
+            if (!savedDays.isNullOrEmpty()) {
+                selectedDays = savedDays
+            }
         }
     }
 
     val dateFormat = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
+    val isoFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     val timeFormat = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
     val timeParseFormat = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
     val today = remember { Calendar.getInstance() }
@@ -310,8 +318,8 @@ fun DoctorDashboard(
                                 )
                             }
                             Switch(
-                                checked = isOnline,
-                                onCheckedChange = { isOnline = it },
+                                checked = uiState.clinicOpen,
+                                onCheckedChange = { viewModel.setStatus(it) },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = White,
                                     checkedTrackColor = PrimaryBlue
@@ -517,6 +525,78 @@ fun DoctorDashboard(
                         }
                     }
 
+                    // Working Days Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Working Days",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkText
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Select the days you are available (includes weekends)",
+                                fontSize = 12.sp,
+                                color = MutedText
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                allDays.chunked(4).forEach { rowDays ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        rowDays.forEach { day ->
+                                            val isSelected = day in selectedDays
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(40.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .then(
+                                                        if (isSelected) {
+                                                            Modifier.background(PrimaryBlue)
+                                                        } else {
+                                                            Modifier.border(1.dp, BorderColor, RoundedCornerShape(8.dp))
+                                                        }
+                                                    )
+                                                    .clickable {
+                                                        selectedDays = if (isSelected) {
+                                                            selectedDays - day
+                                                        } else {
+                                                            selectedDays + day
+                                                        }
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = day.replaceFirstChar { it.uppercase() },
+                                                    fontSize = 12.sp,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isSelected) White else DarkText
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (selectedDays.isEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Select at least one working day",
+                                    fontSize = 12.sp,
+                                    color = WarningOrange
+                                )
+                            }
+                        }
+                    }
+
                     // Generated Slot Preview
                     Text(
                         text = "Generated Slot Preview (${generatedSlots.size} Slots)",
@@ -596,28 +676,35 @@ fun DoctorDashboard(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Publish Button
+                    var publishError by remember { mutableStateOf<String?>(null) }
+
+                    val isPublishing = uiState.isLoading
+
                     Button(
                         onClick = {
+                            if (isPublishing) return@Button
+                            publishError = null
+                            if (fromDate.isBlank() || toDate.isBlank()) {
+                                publishError = "Please select both From and To dates"
+                                return@Button
+                            }
+
                             val template = try {
-                                val days = if (fromDate.isNotBlank() && toDate.isNotBlank()) {
-                                    val from = dateFormat.parse(fromDate)
-                                    val to = dateFormat.parse(toDate)
-                                    val cal = Calendar.getInstance().apply { time = from }
-                                    val set = mutableSetOf<String>()
-                                    while (!cal.after(to)) {
-                                        val dow = cal.get(Calendar.DAY_OF_WEEK)
-                                        if (dow in Calendar.MONDAY..Calendar.FRIDAY) {
-                                            cal.getDisplayName(
-                                                Calendar.DAY_OF_WEEK, Calendar.LONG, Locale.US
-                                            )?.lowercase()?.let { set.add(it) }
-                                        }
-                                        cal.add(Calendar.DAY_OF_MONTH, 1)
-                                    }
-                                    set.toList()
-                                } else {
-                                    listOf("monday", "tuesday", "wednesday", "thursday", "friday")
+                                val from = dateFormat.parse(fromDate)
+                                val to = dateFormat.parse(toDate)
+                                if (from == null || to == null) {
+                                    publishError = "Invalid date format"
+                                    return@Button
                                 }
-                                days.map { day ->
+                                val weekStart = isoFormat.format(from)
+
+                                if (selectedDays.isEmpty()) {
+                                    publishError = "Select at least one working day"
+                                    return@Button
+                                }
+
+                                val days = allDays.filter { it in selectedDays }
+                                val slots = days.map { day ->
                                     SlotUpdate(
                                         day = day,
                                         startTime = startTime,
@@ -625,29 +712,52 @@ fun DoctorDashboard(
                                         slotMinutes = intervalMinutes
                                     )
                                 }
-                            } catch (_: Exception) {
-                                emptyList()
+                                Pair(slots, weekStart)
+                            } catch (e: Exception) {
+                                publishError = "Error: ${e.message}"
+                                return@Button
                             }
 
-                            if (template.isNotEmpty()) {
-                                viewModel.updateSchedule(template)
-                                viewModel.publishNextWeek(template)
-                            }
+                            viewModel.publishSlots(template.first, template.second)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
+                        enabled = true,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryBlue,
-                            contentColor = White
+                            containerColor = if (isPublishing) PrimaryBlue.copy(alpha = 0.85f) else PrimaryBlue,
+                            contentColor = White,
+                            disabledContainerColor = PrimaryBlue,
+                            disabledContentColor = White
                         ),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text(
-                            text = "Publish Slots for Patient Booking",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (isPublishing) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 3.dp,
+                                    color = White
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "Publishing slots...",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = White
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "Publish Slots for Patient Booking",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
                     uiState.error?.let { err ->
@@ -659,19 +769,45 @@ fun DoctorDashboard(
                         )
                     }
 
+                    publishError?.let { err ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = err,
+                            fontSize = 13.sp,
+                            color = Color.Red
+                        )
+                    }
+
+                    if (uiState.publishedSlotCount > 0 && !uiState.isLoading) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF4CAF50).copy(alpha = 0.1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "${uiState.publishedSlotCount} slots published successfully!",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF4CAF50),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
                 }
-            }
-        }
-
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f)),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = PrimaryBlue)
             }
         }
     }

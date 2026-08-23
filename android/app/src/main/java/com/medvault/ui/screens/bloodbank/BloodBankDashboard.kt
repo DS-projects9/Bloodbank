@@ -30,6 +30,14 @@ fun BloodBankDashboard(
     val uiState by viewModel.uiState.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
     var selectedNavIndex by remember { mutableIntStateOf(1) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearError()
+        }
+    }
 
     if (uiState.isLoading) {
         Box(
@@ -90,7 +98,8 @@ fun BloodBankDashboard(
                     )
                 )
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -186,8 +195,8 @@ fun BloodBankDashboard(
                 if (selectedTab == 0) {
                     uiState.bloodRequests.forEach { request ->
                         BloodRequestCard(
-                            bloodGroup = request["bloodGroup"] as? String ?: "O-",
-                            severity = request["urgency"] as? String ?: "URGENT",
+                            bloodGroup = request["bloodGroup"] as? String ?: "",
+                            severity = request["urgency"] as? String ?: "",
                             units = (request["units"] as? Number)?.toInt() ?: 1,
                             timeAgo = request["timeAgo"] as? String ?: "",
                             patientName = request["patientName"] as? String ?: "Unknown",
@@ -195,11 +204,14 @@ fun BloodBankDashboard(
                             distance = request["distance"] as? String ?: "",
                             isCritical = (request["urgency"] as? String)?.uppercase() == "CRITICAL",
                             onFulfill = {
-                                val requestId = request["_id"] as? String ?: ""
+                                val requestId = request["requestId"] as? String ?: ""
                                 val units = (request["units"] as? Number)?.toInt() ?: 1
                                 viewModel.fulfillBloodRequest(requestId, units)
                             },
-                            onDecline = { }
+                            onDecline = {
+                                val requestId = request["requestId"] as? String ?: ""
+                                viewModel.declineBloodRequest(requestId)
+                            }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                     }
@@ -215,17 +227,16 @@ fun BloodBankDashboard(
                     )
                 } else {
                     uiState.donorBookings.forEach { booking ->
+                        val bookingId = booking["bookingId"] as? String ?: ""
                         DonorBookingCard(
+                            bookingId = bookingId,
                             donorName = booking["donorName"] as? String ?: "Unknown Donor",
-                            bloodGroup = booking["bloodGroup"] as? String ?: "O+",
-                            lastDonated = "Last Donated: ${booking["lastDonated"] as? String ?: "Unknown"}",
-                            slotTime = booking["slotTime"] as? String ?: "",
-                            status = booking["status"] as? String ?: "Confirmed Booking",
-                            onCheckIn = { },
-                            onCancel = {
-                                val bookingId = booking["_id"] as? String ?: ""
-                                viewModel.cancelDonorBooking(bookingId)
-                            }
+                            bloodGroup = booking["bloodGroup"] as? String ?: "",
+                            lastDonated = "Last Donated: ${booking["lastDonated"] as? String ?: "N/A"}",
+                            slotTime = booking["slotTime"] as? String ?: booking["scheduledTime"] as? String ?: "",
+                            status = booking["status"] as? String ?: "",
+                            onCheckIn = { viewModel.checkInDonorBooking(bookingId) },
+                            onCancel = { viewModel.cancelDonorBooking(bookingId) }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                     }
@@ -269,7 +280,7 @@ private fun BloodRequestCard(
                     color = EmergencyRed
                 ) {
                     Text(
-                        text = "$bloodGroup POSITIVE",
+                        text = "$bloodGroup ${if (bloodGroup.contains("-")) "NEGATIVE" else "POSITIVE"}",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -371,6 +382,7 @@ private fun BloodRequestCard(
 
 @Composable
 private fun DonorBookingCard(
+    bookingId: String,
     donorName: String,
     bloodGroup: String,
     lastDonated: String,

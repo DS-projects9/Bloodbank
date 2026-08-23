@@ -52,6 +52,11 @@ fun LogUpdateInventoryScreen(
     val dateFormat = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
     val today = remember { Calendar.getInstance() }
 
+    @Suppress("UNCHECKED_CAST")
+    val bloodGroupUnits = remember(uiState.inventory) {
+        (uiState.inventory?.get("bloodGroupUnits") as? Map<String, Any>) ?: emptyMap()
+    }
+
     if (showCollectionDatePicker) {
         val datePickerState = rememberDatePickerState(initialSelectedDateMillis = today.timeInMillis)
         DatePickerDialog(
@@ -446,7 +451,13 @@ fun LogUpdateInventoryScreen(
                             viewModel.adjustInventory(
                                 bloodGroup = bloodGroup,
                                 units = unitCount,
-                                reason = notes.ifEmpty { "Stock addition" }
+                                reason = notes.ifEmpty { "Stock addition" },
+                                expiryDate = expiryDate.ifEmpty { null },
+                                vaultLocation = vaultLocation.ifEmpty { null },
+                                collectionDate = collectionDate.ifEmpty { null },
+                                volumePerUnit = volumePerUnit.toDoubleOrNull()?.div(1000.0),
+                                storageTemp = storageTemp.ifEmpty { null },
+                                notes = notes.ifEmpty { null },
                             )
                             submitted = true
                         },
@@ -545,6 +556,44 @@ fun LogUpdateInventoryScreen(
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
+
+                            if (bloodGroup.isNotEmpty()) {
+                                val availableUnits = (bloodGroupUnits[bloodGroup] as? Number)?.toInt() ?: 0
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (availableUnits > 0) Color(0xFFFFF3E0) else EmergencyRed.copy(alpha = 0.1f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Inventory2,
+                                            contentDescription = null,
+                                            tint = if (availableUnits > 0) WarningOrange else EmergencyRed,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Column {
+                                            Text(
+                                                text = "Available: $availableUnits units of $bloodGroup",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (availableUnits > 0) WarningOrange else EmergencyRed
+                                            )
+                                            if (availableUnits == 0) {
+                                                Text(
+                                                    text = "Cannot dispatch - no stock available",
+                                                    fontSize = 11.sp,
+                                                    color = EmergencyRed
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
 
                             // Units to dispatch
                             Text(text = "Units to Dispatch", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = DarkText)

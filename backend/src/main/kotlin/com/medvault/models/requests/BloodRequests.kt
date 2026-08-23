@@ -34,6 +34,12 @@ data class BloodInventoryAdjustRequest(
     val bloodGroup: String,
     val units: Int,
     val reason: String,
+    val expiryDate: String? = null,
+    val vaultLocation: String? = null,
+    val collectionDate: String? = null,
+    val volumePerUnit: Double? = null,
+    val storageTemp: String? = null,
+    val notes: String? = null,
 )
 
 @Serializable
@@ -48,4 +54,14 @@ data class BloodBankConfigRequest(
     val hospitalAddress: String,
     val bankName: String? = null,
     val bloodBankLicense: String? = null,
+)
+
+@Serializable
+data class BloodRequestCancel(
+    val requestId: String,
+)
+
+@Serializable
+data class DonorBookingCancel(
+    val bookingId: String,
 )

@@ -126,12 +126,6 @@ fun BloodBankProfileScreen(
                     color = DarkText
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                Icon(
-                    Icons.Default.Settings,
-                    contentDescription = "Settings",
-                    tint = EmergencyRed,
-                    modifier = Modifier.size(22.dp)
-                )
             }
 
             // Facility Card
@@ -222,8 +216,10 @@ fun BloodBankProfileScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
+                            val city = uiState.profile?.get("city") as? String ?: ""
+                            val address = uiState.profile?.get("bankAddress") as? String ?: ""
                             Text(
-                                text = "Geofirestore Active • Guntur, AP (16.3067° N, 80.4365° E)",
+                                text = if (city.isNotEmpty()) "Active \u2022 $address, $city" else "Location not set",
                                 fontSize = 12.sp,
                                 color = PrimaryBlue
                             )
@@ -274,12 +270,12 @@ fun BloodBankProfileScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text(text = "Facility Category", fontSize = 12.sp, color = MutedText)
-                            Text(text = "Major Component Unit", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
+                            Text(text = "Facility Type", fontSize = 12.sp, color = MutedText)
+                            Text(text = uiState.profile?.get("bankName") as? String ?: "Blood Bank", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(text = "License Expiry", fontSize = 12.sp, color = MutedText)
-                            Text(text = "31 Dec 2028", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
+                            Text(text = "License Number", fontSize = 12.sp, color = MutedText)
+                            Text(text = uiState.profile?.get("bloodBankLicense") as? String ?: "", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
                         }
                     }
                 }
@@ -329,31 +325,31 @@ fun BloodBankProfileScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Settings Rows
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column {
-                    SettingsRow(
-                        icon = Icons.Default.Shield,
-                        title = "Immutable Stock Audit Log"
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingsRow(
-                        icon = Icons.Default.Groups,
-                        title = "Staff Access & Authorization Roles"
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingsRow(
-                        icon = Icons.Default.Lock,
-                        title = "Firebase Auth & Security Credentials"
-                    )
-                }
-            }
+            //Card(
+              //  modifier = Modifier
+                //    .fillMaxWidth()
+                  //  .padding(horizontal = 16.dp),
+                //shape = RoundedCornerShape(12.dp),
+                //colors = CardDefaults.cardColors(containerColor = White),
+                //elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            //) {
+             //   Column {
+               //     SettingsRow(
+                 //       icon = Icons.Default.Shield,
+                  //      title = "Immutable Stock Audit Log"
+                   // )
+                   // HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                   // SettingsRow(
+                    //    icon = Icons.Default.Groups,
+                    //    title = "Staff Access & Authorization Roles"
+                   // )
+                    //HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    //SettingsRow(
+                     //   icon = Icons.Default.Lock,
+                      //  title = "Firebase Auth & Security Credentials"
+                //    )
+                //}
+            //}
 
             Spacer(modifier = Modifier.height(20.dp))
 

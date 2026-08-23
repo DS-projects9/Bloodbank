@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 data class OkResponse(val ok: Boolean = true)
 
 @Serializable
-data class VerifiedResponse(val verified: Boolean)
+data class VerifiedResponse(val verified: Boolean, val token: String? = null)
 
 @Serializable
 data class SlotsCreatedResponse(val slotsCreated: Int)

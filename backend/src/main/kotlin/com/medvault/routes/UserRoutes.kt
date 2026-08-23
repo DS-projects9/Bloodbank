@@ -91,5 +91,36 @@ fun Route.userRoutes() {
 
             call.respond(success(OkResponse()))
         }
+
+        // Delete only the reports/documents the user has stored in the vault.
+        delete("/me/reports") {
+            val auth = call.requireAuth()
+            val docs = FirestoreAdapter.queryRaw("vault", listOf("ownerUid" to auth.uid), limit = 1000)
+            docs.forEach { FirestoreAdapter.delete("vault", it.id) }
+            call.respond(success(mapOf("deletedReports" to docs.size)))
+        }
+
+        // Delete the complete account and all related data across collections.
+        delete("/me") {
+            val auth = call.requireAuth()
+            val uid = auth.uid
+
+            deleteByField("vault", "ownerUid", uid)
+            deleteByField("appointments", "patientUid", uid)
+            deleteByField("appointments", "doctorUid", uid)
+            deleteByField("blood_requests", "patientUid", uid)
+            deleteByField("blood_donations", "donorUid", uid)
+            deleteByField("schedule_config", "doctorUid", uid)
+            deleteByField("slots", "doctorUid", uid)
+
+            FirestoreAdapter.delete("users", uid)
+
+            call.respond(success(mapOf("deleted" to true)))
+        }
     }
+}
+
+private suspend fun deleteByField(collection: String, field: String, value: String) {
+    FirestoreAdapter.queryRaw(collection, listOf(field to value), limit = 2000)
+        .forEach { FirestoreAdapter.delete(collection, it.id) }
 }

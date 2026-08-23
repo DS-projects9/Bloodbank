@@ -29,7 +29,21 @@ data class DonorBookingCreate(
 data class BloodInventoryAdjustRequest(
     val bloodGroup: String,
     val units: Int,
-    val reason: String
+    val reason: String,
+    val expiryDate: String? = null,
+    val vaultLocation: String? = null,
+    val collectionDate: String? = null,
+    val volumePerUnit: Double? = null,
+    val storageTemp: String? = null,
+    val notes: String? = null
+)
+
+data class BloodRequestCancelRequest(
+    val requestId: String
+)
+
+data class DonorBookingCancelRequest(
+    val bookingId: String
 )
 
 interface BloodApi {
@@ -38,6 +52,12 @@ interface BloodApi {
 
     @GET("api/v1/blood-requests/mine")
     suspend fun getMyBloodRequests(): ApiResponse<List<Map<String, Any>>>
+
+    @POST("api/v1/blood-requests/cancel")
+    suspend fun cancelBloodRequest(@Body request: BloodRequestCancelRequest): ApiResponse<Map<String, Any>>
+
+    @POST("api/v1/blood-requests/decline")
+    suspend fun declineBloodRequest(@Body request: BloodRequestCancelRequest): ApiResponse<Map<String, Any>>
 
     @POST("api/v1/blood-requests/fulfill")
     suspend fun fulfillBloodRequest(@Body request: BloodFulfillRequest): ApiResponse<Map<String, Any>>
@@ -67,5 +87,8 @@ interface BloodApi {
     suspend fun getUpcomingDonorBookings(): ApiResponse<List<Map<String, Any>>>
 
     @POST("api/v1/donor-bookings/cancel")
-    suspend fun cancelDonorBooking(@Body request: Map<String, String>): ApiResponse<Map<String, Any>>
+    suspend fun cancelDonorBooking(@Body request: DonorBookingCancelRequest): ApiResponse<Map<String, Any>>
+
+    @POST("api/v1/donor-bookings/check-in")
+    suspend fun checkInDonorBooking(@Body request: DonorBookingCancelRequest): ApiResponse<Map<String, Any>>
 }

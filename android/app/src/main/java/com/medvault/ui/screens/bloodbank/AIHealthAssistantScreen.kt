@@ -138,61 +138,10 @@ fun AIHealthAssistantScreen(
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "If you are experiencing a medical emergency, bypass AI and trigger an immediate blood search or human intervention.",
-                            fontSize = 14.sp,
-                            color = DarkText,
-                            lineHeight = 20.sp
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = onNavigateToEmergencySearch,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = EmergencyRed,
-                                contentColor = White
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "Trigger Emergency Search",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                Icons.Default.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Quick Suggestion Chips
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SuggestionChip(
-                        onClick = { message = "Summarize my latest Blood Test" },
-                        label = { Text("Summarize my latest Blood Test", fontSize = 12.sp) },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = LightBlue
-                        )
-                    )
-                    SuggestionChip(
-                        onClick = { message = "Explain time-boxed vault" },
-                        label = { Text("Explain time-boxed vault", fontSize = 12.sp) },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = LightBlue
-                        )
-                    )
-                }
+                //Spacer(modifier = Modifier.height(16.dp))
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -302,6 +251,39 @@ fun AIHealthAssistantScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
+                }
+
+                // Error banner
+                uiState.error?.let { err ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = EmergencyRed.copy(alpha = 0.1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = EmergencyRed,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = err,
+                                fontSize = 12.sp,
+                                color = EmergencyRed,
+                                modifier = Modifier.weight(1f),
+                                lineHeight = 16.sp
+                            )
+                            TextButton(onClick = { viewModel.clearError() }) {
+                                Text("Dismiss", fontSize = 12.sp, color = EmergencyRed)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
 
                 // Typing indicator

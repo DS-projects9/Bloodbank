@@ -25,14 +25,16 @@ dependencies {
     implementation("io.ktor:ktor-server-cors:3.0.3")
     implementation("io.ktor:ktor-server-call-logging:3.0.3")
 
-    // Firebase Admin
-    implementation("com.google.firebase:firebase-admin:9.2.0")
+    // Postgres (primary datastore, used as a JSON document store)
+    implementation("org.postgresql:postgresql:42.7.4")
+    implementation("com.zaxxer:HikariCP:5.1.0")
 
-    // Firestore
-    implementation("com.google.cloud:google-cloud-firestore:3.31.0")
+    // MinIO (S3-compatible object storage, replaces Firebase Storage)
+    implementation("io.minio:minio:8.5.10")
 
-    // Google Cloud Storage (for signed URLs)
-    implementation("com.google.cloud:google-cloud-storage:2.40.0")
+    // JWT auth (replaces Firebase Auth)
+    implementation("com.auth0:java-jwt:4.4.0")
+    implementation("at.favre.lib:bcrypt:0.10.2")
 
     // HTTP Client (for AI proxy)
     implementation("io.ktor:ktor-client-cio:3.0.3")

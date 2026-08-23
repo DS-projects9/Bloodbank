@@ -35,8 +35,17 @@ fun InventoryStockDetailsScreen(
         val units = uiState.inventory?.get("bloodGroupUnits") as? Map<*, *> ?: emptyMap<String, Any>()
         (units[bloodGroup] as? Number)?.toInt() ?: 0
     }
-    val totalVolumeLiters = remember(bloodGroupUnits) { bloodGroupUnits * 0.5 }
+    val volumePerUnit = remember(uiState.inventory) {
+        (uiState.inventory?.get("volumePerUnit") as? Number)?.toDouble() ?: 0.5
+    }
+    val totalVolumeLiters = remember(bloodGroupUnits) { bloodGroupUnits * volumePerUnit }
     val isCriticalLow = bloodGroupUnits <= 2
+
+    val storageTemp = remember(uiState.inventory) {
+        uiState.inventory?.get("storageTemp") as? String ?: "4.0"
+    }
+
+    val polarity = if (bloodGroup.contains("-")) "Negative" else "Positive"
 
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
 
@@ -64,24 +73,10 @@ fun InventoryStockDetailsScreen(
                     Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = DarkText)
                 }
                 Text(
-                    text = "$bloodGroup Negative Stock Details",
+                    text = "$bloodGroup $polarity Stock Details",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = DarkText
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "Add Batch",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = PrimaryBlue
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "Add Batch",
-                    tint = PrimaryBlue,
-                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -114,7 +109,7 @@ fun InventoryStockDetailsScreen(
                             color = EmergencyRed
                         ) {
                             Text(
-                                text = "$bloodGroup- NEGATIVE",
+                                text = "$bloodGroup ${polarity.uppercase()}",
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
@@ -174,7 +169,7 @@ fun InventoryStockDetailsScreen(
                                 color = MutedText
                             )
                             Text(
-                                text = "4.0° C",
+                                text = "${storageTemp}° C",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = PrimaryBlue
@@ -198,13 +193,14 @@ fun InventoryStockDetailsScreen(
 
             if (bloodGroupUnits > 0) {
                 BatchCard(
-                    batchId = "#INV-${bloodGroup.replace("+", "P").replace("-", "N")}-CURRENT",
+                    batchId = uiState.inventory?.get("batchId") as? String ?: "#INV-${bloodGroup.replace("+", "P").replace("-", "N")}",
                     expiryBadge = if (bloodGroupUnits <= 2) "Low Stock" else "In Stock",
                     expiryBadgeColor = if (bloodGroupUnits <= 2) WarningOrange else SuccessGreen,
-                    collectionDate = dateFormat.format(Date(uiState.inventory?.get("lastUpdated") as? Long ?: System.currentTimeMillis())),
-                    expiryDate = "N/A",
-                    volume = "$bloodGroupUnits Units (${bloodGroupUnits * 500} ml)",
-                    vaultLocation = "Blood Bank Vault"
+                    collectionDate = uiState.inventory?.get("collectionDate") as? String
+                        ?: dateFormat.format(Date(uiState.inventory?.get("lastUpdated") as? Long ?: System.currentTimeMillis())),
+                    expiryDate = uiState.inventory?.get("expiryDate") as? String ?: "N/A",
+                    volume = "$bloodGroupUnits Units (${bloodGroupUnits * (volumePerUnit * 1000).toInt()} ml)",
+                    vaultLocation = uiState.inventory?.get("vaultLocation") as? String ?: "Not specified"
                 )
             } else {
                 Text(

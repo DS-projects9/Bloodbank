@@ -176,21 +176,12 @@ private fun DoctorCard(
                         color = SecondaryText
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Star,
-                        contentDescription = null,
-                        tint = WarningOrange,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "${doctor.availableSlots} slots",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = DarkText
-                    )
-                }
+                Text(
+                    text = "${doctor.availableSlots} slots",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = DarkText
+                )
             }
             Spacer(modifier = Modifier.height(12.dp))
             Row(

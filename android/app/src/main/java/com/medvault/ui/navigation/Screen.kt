@@ -3,7 +3,6 @@ package com.medvault.ui.navigation
 sealed class Screen(val route: String) {
     // Auth
     data object Login : Screen("login")
-    data object ConsentGate : Screen("consent_gate")
     data object RoleSelect : Screen("role_select")
 
     // Patient
@@ -14,10 +13,16 @@ sealed class Screen(val route: String) {
         fun createRoute(doctorUid: String) = "patient/appointment/$doctorUid"
     }
     data object EmergencyBloodSearch : Screen("patient/emergency_blood")
-    data object HealthVault : Screen("patient/health_vault")
+    data object PatientBloodRequests : Screen("patient/blood_requests")
+    data object HealthVault : Screen("patient/health_vault/{appointmentId}/{doctorUid}?doctorName={doctorName}") {
+        fun createRoute(appointmentId: String, doctorUid: String, doctorName: String? = null): String {
+            val base = "patient/health_vault/$appointmentId/$doctorUid"
+            return if (doctorName.isNullOrBlank()) base
+            else "$base?doctorName=${java.net.URLEncoder.encode(doctorName, "UTF-8")}"
+        }
+    }
     data object PatientAppointments : Screen("patient/appointments")
     data object BloodDonation : Screen("patient/blood_donation")
-    data object PatientSettings : Screen("patient/settings")
     data object ConsentManager : Screen("patient/consent_manager")
     data object BiometricLock : Screen("patient/biometric_lock")
 

@@ -13,6 +13,7 @@ USERS=(
 "bb.redcross@medvault.dev|BLOOD_BANK|,\"name\":\"Red Cross Blood Bank\",\"phone\":\"+91 90000 20001\",\"city\":\"Guntur\",\"bankName\":\"Red Cross\",\"bankAddress\":\"MG Road, Guntur\",\"bloodBankLicense\":\"BB-2001\""
 "bb.lifeline@medvault.dev|BLOOD_BANK|,\"name\":\"LifeLine Blood Bank\",\"phone\":\"+91 90000 20002\",\"city\":\"Hyderabad\",\"bankName\":\"LifeLine\",\"bankAddress\":\"Banjara Hills, Hyderabad\",\"bloodBankLicense\":\"BB-2002\""
 "bb.care@medvault.dev|BLOOD_BANK|,\"name\":\"Care Blood Center\",\"phone\":\"+91 90000 20003\",\"city\":\"Bangalore\",\"bankName\":\"Care\",\"bankAddress\":\"Indiranagar, Bangalore\",\"bloodBankLicense\":\"BB-2003\""
+"patient@medvault.dev|PATIENT|,\"name\":\"Test Patient\",\"phone\":\"+91 90000 30001\",\"city\":\"Mumbai\",\"dob\":\"1995-02-10\",\"bloodGroup\":\"B+\""
 )
 
 for line in "${USERS[@]}"; do

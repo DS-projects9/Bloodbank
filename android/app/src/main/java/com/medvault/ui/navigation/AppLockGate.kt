@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,6 +65,7 @@ fun AppLockGate(content: @Composable () -> Unit) {
             content()
         }
         else -> {
+            val canAuth = activity?.let { BiometricAuthManager.canAuthenticate(it) } ?: false
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -79,11 +82,28 @@ fun AppLockGate(content: @Composable () -> Unit) {
                         text = "Unlock to open MedVault",
                         style = MaterialTheme.typography.bodyLarge
                     )
+                    if (!canAuth) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "No biometric credentials enrolled on this device.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = { unlocked = true }) {
+                            Text("Continue")
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(onClick = { unlocked = true }) {
+                            Text("Use without biometrics")
+                        }
+                    }
                 }
             }
-            LaunchedEffect(Unit) {
-                activity?.let { act ->
-                    if (BiometricAuthManager.canAuthenticate(act)) {
+            if (canAuth) {
+                LaunchedEffect(Unit) {
+                    activity?.let { act ->
                         BiometricAuthManager.authenticate(
                             activity = act,
                             title = "Unlock MedVault",

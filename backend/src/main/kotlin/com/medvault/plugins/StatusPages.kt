@@ -1,5 +1,6 @@
 package com.medvault.plugins
 
+import com.medvault.LlmException
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.statuspages.*
@@ -19,6 +20,7 @@ fun Application.configureStatusPages() {
             val status = when (cause) {
                 is IllegalArgumentException -> HttpStatusCode.BadRequest
                 is SecurityException -> HttpStatusCode.Unauthorized
+                is LlmException -> HttpStatusCode.ServiceUnavailable
                 is IllegalStateException -> HttpStatusCode.Conflict
                 else -> HttpStatusCode.InternalServerError
             }

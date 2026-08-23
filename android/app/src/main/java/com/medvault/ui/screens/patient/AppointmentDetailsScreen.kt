@@ -1,6 +1,8 @@
 package com.medvault.ui.screens.patient
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -15,15 +17,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.medvault.ui.theme.*
 import com.medvault.viewmodel.PatientViewModel
-import java.time.DayOfWeek
+import com.medvault.viewmodel.SharedFile
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,6 +37,7 @@ import java.util.Locale
 fun AppointmentDetailsScreen(
     doctorUid: String,
     onBack: () -> Unit,
+    onNavigateToHealthVault: (appointmentId: String, doctorUid: String, doctorName: String?) -> Unit,
     viewModel: PatientViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -38,15 +45,22 @@ fun AppointmentDetailsScreen(
     val doctor = uiState.doctorSearchResults.find { it.uid == doctorUid }
 
     val today = LocalDate.now()
-    val monday = today.with(DayOfWeek.MONDAY)
-    val weekDates = (0..6).map { monday.plusDays(it.toLong()) }
     val todayStr = today.toString()
 
     var selectedDate by remember { mutableStateOf(todayStr) }
     var selectedSlotId by remember { mutableStateOf<String?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var booked by remember { mutableStateOf(false) }
 
     LaunchedEffect(doctorUid) {
         viewModel.loadDoctorSlots(doctorUid)
+    }
+
+    val dateLabel = try {
+        LocalDate.parse(selectedDate)
+            .format(DateTimeFormatter.ofPattern("EEEE, MMM d yyyy", Locale.ENGLISH))
+    } catch (_: Exception) {
+        selectedDate
     }
 
     val allSlots = uiState.availableSlots
@@ -137,7 +151,7 @@ fun AppointmentDetailsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Date selection (this week)
+            // Date selection (date picker, defaults to today)
             Text(
                 text = "Select Date",
                 fontSize = 18.sp,
@@ -145,33 +159,82 @@ fun AppointmentDetailsScreen(
                 color = DarkText
             )
             Spacer(modifier = Modifier.height(12.dp))
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showDatePicker = true },
+                colors = CardDefaults.cardColors(containerColor = White),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
-                items(weekDates) { date ->
-                    val selected = date.toString() == selectedDate
-                    val isPast = date.isBefore(today)
-                    DateChip(
-                        date = date,
-                        selected = selected,
-                        enabled = !isPast,
-                        onClick = {
-                            selectedDate = date.toString()
-                            selectedSlotId = null
-                        }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(24.dp)
                     )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Appointment Date",
+                            fontSize = 12.sp,
+                            color = SecondaryText
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = dateLabel,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkText
+                        )
+                    }
+                }
+            }
+
+            if (showDatePicker) {
+                val initialMillis = try {
+                    LocalDate.parse(selectedDate)
+                        .atStartOfDay(java.time.ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli()
+                } catch (_: Exception) {
+                    System.currentTimeMillis()
+                }
+                val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            datePickerState.selectedDateMillis?.let { millis ->
+                                val picked = LocalDate.ofInstant(
+                                    java.time.Instant.ofEpochMilli(millis),
+                                    java.time.ZoneId.systemDefault()
+                                )
+                                selectedDate = picked.toString()
+                                selectedSlotId = null
+                            }
+                            showDatePicker = false
+                        }) { Text("OK", color = PrimaryBlue) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePicker = false }) {
+                            Text("Cancel", color = MutedText)
+                        }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Slots for the selected date
-            val dateLabel = try {
-                LocalDate.parse(selectedDate)
-                    .format(DateTimeFormatter.ofPattern("EEEE, MMM d", Locale.ENGLISH))
-            } catch (_: Exception) {
-                selectedDate
-            }
             Text(
                 text = "Available Slots — $dateLabel",
                 fontSize = 18.sp,
@@ -226,31 +289,439 @@ fun AppointmentDetailsScreen(
 
             Button(
                 onClick = {
-                    selectedSlotId?.let { viewModel.bookAppointment(it, doctorUid) }
-                    onBack()
+                    if (!booked) {
+                        selectedSlotId?.let { viewModel.bookAppointment(it, doctorUid) }
+                        booked = true
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryBlue,
+                    containerColor = if (booked) SuccessGreen else PrimaryBlue,
                     contentColor = White
                 ),
                 shape = RoundedCornerShape(8.dp),
-                enabled = selectedSlotId != null
+                enabled = (selectedSlotId != null && !uiState.isLoading) || booked
             ) {
-                Icon(Icons.Default.Event, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Book Appointment",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (uiState.isLoading && !booked) {
+                    CircularProgressIndicator(color = White, modifier = Modifier.size(20.dp))
+                } else if (booked) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Appointment Booked",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Icon(Icons.Default.Event, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Book Appointment",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            if (booked && uiState.lastAppointmentId != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = SuccessGreen.copy(alpha = 0.08f)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Appointment booked!",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SuccessGreen
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Upload and share documents with ${doctor?.name ?: "the doctor"} before your appointment. Files are time-boxed — the doctor can only view them during your appointment window.",
+                            fontSize = 13.sp,
+                            color = SecondaryText
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        onNavigateToHealthVault(
+                            uiState.lastAppointmentId!!,
+                            doctorUid,
+                            doctor?.name
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PrimaryBlue,
+                        contentColor = White
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Upload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Manage Documents", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryBlue),
+                    border = BorderStroke(1.dp, PrimaryBlue),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Done", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                }
+            }
         }
     }
+}
+
+@Composable
+fun ShareFilesSection(
+    doctorName: String,
+    myDocuments: List<com.medvault.data.remote.VaultDocument>,
+    sharedFiles: List<SharedFile>,
+    shareStatus: String?,
+    uploadError: String?,
+    onUpload: (Triple<String, String, ByteArray>) -> Unit,
+    onShare: (List<String>, Int) -> Unit,
+    onRevoke: (String) -> Unit,
+    onExtend: (String, Long) -> Unit,
+    onDone: () -> Unit
+) {
+    val context = LocalContext.current
+    var selectedFiles by remember { mutableStateOf(setOf<String>()) }
+    var durationMinutes by remember { mutableIntStateOf(60) }
+
+    val durationChoices = listOf(
+        "15 min" to 15,
+        "30 min" to 30,
+        "1 hour" to 60,
+        "2 hours" to 120,
+        "4 hours" to 240,
+        "8 hours" to 480,
+        "1 day" to 1440,
+    )
+
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { picked ->
+            val name = getFileName(context, picked)
+            val type = context.contentResolver.getType(picked) ?: "application/octet-stream"
+            val bytes = context.contentResolver.openInputStream(picked)?.use { it.readBytes() }
+            if (bytes != null) {
+                onUpload(Triple(name, type, bytes))
+            }
+        }
+    }
+
+    val myFiles = myDocuments.flatMap { it.fileNames }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = BackgroundPurple.copy(alpha = 0.06f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Share files with $doctorName",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = DarkText
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Upload documents from your device, then select which ones to share for this appointment. Access is limited to the time window you choose — the doctor can only view them during that period.",
+                fontSize = 13.sp,
+                color = SecondaryText
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = { filePicker.launch("*/*") },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PrimaryBlue,
+                    contentColor = White
+                )
+            ) {
+                Icon(Icons.Default.Upload, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Upload from device")
+            }
+
+            uploadError?.let { err ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = err, fontSize = 13.sp, color = DestructiveRed)
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (myFiles.isEmpty()) {
+                Text(
+                    text = "No files uploaded yet.",
+                    fontSize = 14.sp,
+                    color = SecondaryText
+                )
+            } else {
+                Text(
+                    text = "Your files (tap to select)",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = DarkText
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(myFiles) { fileName ->
+                        val selected = selectedFiles.contains(fileName)
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                selectedFiles = if (selected) {
+                                    selectedFiles - fileName
+                                } else {
+                                    selectedFiles + fileName
+                                }
+                            },
+                            label = { Text(fileName, fontSize = 12.sp) },
+                            leadingIcon = if (selected) {
+                                { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            } else null
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Access window (how long the doctor can view these files)",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = DarkText
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(durationChoices) { (label, minutes) ->
+                    FilterChip(
+                        selected = durationMinutes == minutes,
+                        onClick = { durationMinutes = minutes },
+                        label = { Text(label, fontSize = 12.sp) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (shareStatus == "shared") {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Files shared with $doctorName.",
+                        fontSize = 14.sp,
+                        color = SuccessGreen,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            } else {
+                Button(
+                    onClick = { onShare(selectedFiles.toList(), durationMinutes) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = selectedFiles.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PrimaryBlue,
+                        contentColor = White
+                    )
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Share selected (${selectedFiles.size})")
+                }
+            }
+
+            if (sharedFiles.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    text = "Active shares",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkText
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                sharedFiles.forEach { share ->
+                    SharedFileRow(
+                        share = share,
+                        durationChoices = durationChoices,
+                        onRevoke = { onRevoke(share.documentId) },
+                        onExtend = { minutes -> onExtend(share.documentId, minutes) }
+                    )
+                }
+            }
+
+            if (shareStatus == "shared" || sharedFiles.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedButton(
+                    onClick = onDone,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryBlue),
+                    border = BorderStroke(1.dp, PrimaryBlue)
+                ) {
+                    Text("Done")
+                }
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+}
+
+@Composable
+private fun SharedFileRow(
+    share: SharedFile,
+    durationChoices: List<Pair<String, Int>>,
+    onRevoke: () -> Unit,
+    onExtend: (Long) -> Unit
+) {
+    var extendMinutes by remember(share.documentId) { mutableIntStateOf(60) }
+    val isRevoked = share.status == "revoked"
+    val remainingMs = if (isRevoked) 0 else (share.expiresAt - System.currentTimeMillis()).coerceAtLeast(0)
+    val remainingText = if (isRevoked) "Revoked" else formatRemaining(remainingMs)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isRevoked) DisabledGray else White
+        ),
+        shape = RoundedCornerShape(10.dp),
+        border = CardDefaults.outlinedCardBorder().copy(
+            brush = SolidColor(if (isRevoked) BorderColor else PrimaryBlue)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = share.fileNames.firstOrNull() ?: "Document",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = DarkText
+                )
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (isRevoked) DestructiveRed.copy(alpha = 0.1f)
+                    else SuccessGreen.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = remainingText,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isRevoked) DestructiveRed else SuccessGreen
+                    )
+                }
+            }
+
+            if (!isRevoked) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Extend access by",
+                    fontSize = 12.sp,
+                    color = SecondaryText
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(durationChoices) { (label, minutes) ->
+                        FilterChip(
+                            selected = extendMinutes == minutes,
+                            onClick = { extendMinutes = minutes },
+                            label = { Text(label, fontSize = 11.sp) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { onExtend(extendMinutes.toLong()) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PrimaryBlue,
+                            contentColor = White
+                        )
+                    ) {
+                        Icon(Icons.Default.Schedule, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Extend", fontSize = 13.sp)
+                    }
+                    Button(
+                        onClick = onRevoke,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = DestructiveRed,
+                            contentColor = White
+                        )
+                    ) {
+                        Icon(Icons.Default.Block, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Revoke", fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatRemaining(ms: Long): String {
+    val totalMin = ms / 60000
+    return when {
+        totalMin < 60 -> "$totalMin min left"
+        totalMin < 1440 -> {
+            val h = totalMin / 60
+            val m = totalMin % 60
+            if (m == 0L) "$h hr left" else "$h hr ${m}m left"
+        }
+        else -> {
+            val d = totalMin / 1440
+            val h = (totalMin % 1440) / 60
+            if (h == 0L) "$d d left" else "$d d ${h}h left"
+        }
+    }
+}
+
+private fun getFileName(context: Context, uri: Uri): String {
+    var name = uri.lastPathSegment ?: "document"
+    val cursor = context.contentResolver.query(uri, null, null, null, null)
+    cursor?.use {
+        val idx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+        if (idx >= 0 && it.moveToFirst()) {
+            name = it.getString(idx)
+        }
+    }
+    return name
 }
 
 @Composable
@@ -327,50 +798,6 @@ private fun TimeSlotChip(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = contentColor
-            )
-        }
-    }
-}
-
-@Composable
-private fun DateChip(
-    date: LocalDate,
-    selected: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    val dayName = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)
-    val dayNum = date.dayOfMonth.toString()
-    Card(
-        modifier = Modifier.width(56.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) PrimaryBlue else White
-        ),
-        shape = RoundedCornerShape(10.dp),
-        border = CardDefaults.outlinedCardBorder().copy(
-            brush = SolidColor(if (selected) PrimaryBlue else BorderColor)
-        ),
-        onClick = onClick,
-        enabled = enabled
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = dayName,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (selected) White else SecondaryText
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = dayNum,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (selected) White else DarkText
             )
         }
     }

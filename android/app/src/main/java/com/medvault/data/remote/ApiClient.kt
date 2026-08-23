@@ -1,15 +1,11 @@
 package com.medvault.data.remote
 
-import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ApiClient @Inject constructor(
-    private val auth: FirebaseAuth
-) {
-    private val retrofit by lazy { NetworkClient.createRetrofit(auth) }
+class ApiClient @Inject constructor() {
+    private val retrofit by lazy { NetworkClient.createRetrofit() }
 
     val authApi: AuthApi by lazy { NetworkClient.createApi(retrofit, AuthApi::class.java) }
     val userApi: UserApi by lazy { NetworkClient.createApi(retrofit, UserApi::class.java) }

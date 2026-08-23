@@ -12,9 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.net.Uri
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.medvault.ui.theme.*
 import com.medvault.viewmodel.PatientViewModel
@@ -28,6 +31,7 @@ fun EmergencyEscalationScreen(
     val uiState by viewModel.uiState.collectAsState()
     var autoNotify by remember { mutableStateOf(true) }
     var elapsedSeconds by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -128,9 +132,9 @@ fun EmergencyEscalationScreen(
                     val nearestBankCount = uiState.nearbyBloodStock.size
                     Text(
                         text = if (nearestBankCount > 0) {
-                            "Primary blood center has not acknowledged. System is expanding broadcast radius. $nearestBankCount nearby banks notified."
+                            "Primary blood center has not acknowledged. System is expanding broadcast radius. $nearestBankCount nearby bank${if (nearestBankCount > 1) "s" else ""} notified."
                         } else {
-                            "Primary blood center has not acknowledged. System is expanding broadcast radius from 5 km to 20 km."
+                            "Primary blood center has not acknowledged. System is expanding broadcast radius."
                         },
                         fontSize = 14.sp,
                         color = MutedText,
@@ -166,7 +170,10 @@ fun EmergencyEscalationScreen(
                                 )
                             }
                             Button(
-                                onClick = { },
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:108"))
+                                    context.startActivity(intent)
+                                },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = EmergencyRed,
                                     contentColor = White
@@ -223,7 +230,14 @@ fun EmergencyEscalationScreen(
                                 )
                             }
                             Button(
-                                onClick = { },
+                                onClick = {
+                                    val patientName = uiState.profile?.get("name") as? String ?: "Patient"
+                                    val city = uiState.profile?.get("city") as? String ?: ""
+                                    val msg = "EMERGENCY: $patientName needs blood urgently!${if (city.isNotEmpty()) " City: $city" else ""} Please help."
+                                    val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:"))
+                                    intent.putExtra("sms_body", msg)
+                                    context.startActivity(intent)
+                                },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = PrimaryBlue,
                                     contentColor = White
@@ -249,7 +263,7 @@ fun EmergencyEscalationScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Auto-Notify Next 3 Nearest Banks",
+                            text = "Auto-Notify Next ${nearestBankCount.coerceAtLeast(3)} Nearest Bank${if (nearestBankCount.coerceAtLeast(3) > 1) "s" else ""}",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = PrimaryBlue

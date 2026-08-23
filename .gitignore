@@ -44,3 +44,7 @@ local.properties
 # Emulator / ngrok helper output
 firebase-debug.log
 firestore-debug.log
+
+# Local credentials (test accounts) — never commit
+passwords
+passwords*

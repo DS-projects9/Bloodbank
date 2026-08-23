@@ -20,6 +20,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.medvault.ui.theme.*
 import com.medvault.viewmodel.BloodBankViewModel
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,9 +51,36 @@ fun BloodInventoryScreen(
         }
     }
 
+    val volumePerUnit = remember(uiState.inventory) {
+        (uiState.inventory?.get("volumePerUnit") as? Number)?.toDouble() ?: 0.5
+    }
+    val totalCapacity = remember(uiState.inventory) {
+        (uiState.inventory?.get("totalCapacity") as? Number)?.toInt() ?: 200
+    }
+
     val totalUnits = remember(inventoryData) { inventoryData.sumOf { it.second } }
-    val totalCapacity = 200
     val progress = if (totalCapacity > 0) totalUnits.toFloat() / totalCapacity else 0f
+
+    val lastUpdatedText = remember(uiState.inventory) {
+        val lastUpdated = uiState.inventory?.get("lastUpdated") as? Number
+        if (lastUpdated != null) {
+            val ts = lastUpdated.toLong()
+            val now = System.currentTimeMillis()
+            val diff = now - ts
+            val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+            val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+            val date = Date(ts)
+            when {
+                diff < TimeUnit.MINUTES.toMillis(1) -> "Just now"
+                diff < TimeUnit.HOURS.toMillis(1) -> "${diff / TimeUnit.MINUTES.toMillis(1)} min ago"
+                diff < TimeUnit.DAYS.toMillis(1) && SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(date) == SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date()) -> {
+                    "Today \u2022 ${timeFormat.format(date)}"
+                }
+                diff < TimeUnit.DAYS.toMillis(2) -> "Yesterday \u2022 ${timeFormat.format(date)}"
+                else -> dateFormat.format(date)
+            }
+        } else "Not yet updated"
+    }
 
     var selectedFilter by remember { mutableIntStateOf(0) }
     val lowStockCount = inventoryData.count { it.second < 10 }
@@ -187,7 +217,7 @@ fun BloodInventoryScreen(
                             }
                         }
                         Text(
-                            text = "(${String.format("%.1f", totalUnits.toDouble() * 0.5)} Liters)",
+                            text = "(${String.format("%.1f", totalUnits.toDouble() * volumePerUnit)} Liters)",
                             fontSize = 13.sp,
                             color = MutedText
                         )
@@ -209,7 +239,7 @@ fun BloodInventoryScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Last Updated: Today \u2022 08:15 AM by Admin",
+                        text = "Last Updated: $lastUpdatedText",
                         fontSize = 12.sp,
                         color = MutedText
                     )
@@ -262,7 +292,7 @@ fun BloodInventoryScreen(
                             InventoryBloodCard(
                                 group = group,
                                 units = units,
-                                liters = units.toDouble() * 0.5,
+                                liters = units.toDouble() * volumePerUnit,
                                 status = status,
                                 isCritical = isCriticalLow,
                                 isLow = isLowStock,

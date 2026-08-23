@@ -22,3 +22,13 @@ data class CancelAppointmentRequest(
     val appointmentId: String,
     val reason: String,
 )
+
+@Serializable
+data class ShareFilesRequest(
+    val fileNames: List<String> = emptyList(),
+    val durationMinutes: Long? = null,
+)
+
+data class ExtendAccessRequest(
+    val durationMinutes: Long,
+)

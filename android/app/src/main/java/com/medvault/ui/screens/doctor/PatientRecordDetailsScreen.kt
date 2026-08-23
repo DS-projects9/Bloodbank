@@ -2,10 +2,12 @@ package com.medvault.ui.screens.doctor
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,14 +15,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.medvault.ui.theme.*
 import com.medvault.viewmodel.DoctorViewModel
-import java.text.SimpleDateFormat
-import java.util.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,94 +35,77 @@ fun PatientRecordDetailsScreen(
     viewModel: DoctorViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(appointmentId) {
         viewModel.loadAppointmentDetails(appointmentId)
     }
 
-    var countdown by remember { mutableIntStateOf(765) }
-
-    LaunchedEffect(Unit) {
-        while (countdown > 0) {
-            kotlinx.coroutines.delay(1000)
-            countdown--
-        }
-    }
-
-    val minutes = countdown / 60
-    val seconds = countdown % 60
-
     val appointment = uiState.selectedAppointment
+
     val patientName = (appointment?.get("patientName") as? String) ?: "Unknown Patient"
-    val patientId = appointment?.get("patientId") as? String
+    val patientId = appointment?.get("patientUid") as? String
+    val bloodGroup = (appointment?.get("bloodGroup") as? String)?.ifEmpty { null } ?: "N/A"
+    val age = (appointment?.get("age") as? Number)?.toInt() ?: 0
+    val gender = (appointment?.get("gender") as? String) ?: ""
+    val phone = (appointment?.get("phone") as? String)?.ifEmpty { null } ?: "N/A"
+    val dob = appointment?.get("dob") as? String
+    val apptDate = appointment?.get("date") as? String ?: ""
+    val apptTime = appointment?.get("time") as? String ?: ""
+    val apptStatus = appointment?.get("status") as? String ?: ""
 
-    @Suppress("UNCHECKED_CAST")
-    val slot = appointment?.get("slot") as? Map<String, Any>
-    val slotStart = (slot?.get("start") as? Number)?.toLong() ?: 0L
-    val slotEnd = (slot?.get("end") as? Number)?.toLong() ?: 0L
-
-    val slotStartStr = if (slotStart > 0) {
-        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(slotStart))
-    } else ""
-    val slotEndStr = if (slotEnd > 0) {
-        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(slotEnd))
-    } else ""
-    val slotDisplay = if (slotStartStr.isNotEmpty() && slotEndStr.isNotEmpty()) {
-        "$slotStartStr - $slotEndStr"
-    } else "N/A"
-
-    @Suppress("UNCHECKED_CAST")
-    val patientProfile = appointment?.get("patientProfile") as? Map<String, Any>
-    val bloodGroup = (patientProfile?.get("bloodGroup") as? String)?.ifEmpty { null }
-        ?: (appointment?.get("bloodGroup") as? String)?.ifEmpty { null }
-        ?: "N/A"
-
-    val dob = (patientProfile?.get("dob") as? String)
-        ?: (appointment?.get("dob") as? String)
-    val ageDisplay = if (!dob.isNullOrEmpty()) {
-        try {
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val birthDate = sdf.parse(dob)
-            val cal = Calendar.getInstance()
-            val today = cal.time
-            cal.time = birthDate ?: today
-            val years = Calendar.getInstance().get(Calendar.YEAR) - cal.get(Calendar.YEAR)
-            val gender = (patientProfile?.get("gender") as? String)
-                ?: (appointment?.get("gender") as? String)
-                ?: ""
-            if (gender.isNotEmpty()) "$years Yrs / $gender" else "$years Yrs"
-        } catch (_: Exception) {
-            val gender = (patientProfile?.get("gender") as? String)
-                ?: (appointment?.get("gender") as? String)
-                ?: ""
-            if (gender.isNotEmpty()) "$dob / $gender" else dob ?: "N/A"
-        }
+    val ageDisplay = if (age > 0) {
+        if (gender.isNotEmpty()) "$age Yrs / $gender" else "$age Yrs"
+    } else if (!dob.isNullOrEmpty()) {
+        if (gender.isNotEmpty()) "$dob / $gender" else dob
     } else {
-        val gender = (patientProfile?.get("gender") as? String)
-            ?: (appointment?.get("gender") as? String)
-            ?: ""
         if (gender.isNotEmpty()) "N/A / $gender" else "N/A"
     }
 
-    val phone = (patientProfile?.get("phone") as? String)?.ifEmpty { null }
-        ?: (appointment?.get("phone") as? String)?.ifEmpty { null }
-        ?: "N/A"
-
-    @Suppress("UNCHECKED_CAST")
-    val emergencyContacts = (patientProfile?.get("emergencyContacts") as? List<Map<String, Any>>)
-        ?: (appointment?.get("emergencyContacts") as? List<Map<String, Any>>)
-        ?: emptyList()
-    val primaryEmergency = emergencyContacts.firstOrNull()
-    val emergencyName = primaryEmergency?.get("name") as? String ?: "N/A"
-    val emergencyPhone = primaryEmergency?.get("phone") as? String ?: ""
-
     val documents = uiState.patientDocuments
+    val hasDocuments = documents.isNotEmpty()
+
+    val timerViewedAt = uiState.timerViewedAt
+    val timerExpiresAt = uiState.timerExpiresAt
+    val timerActive = timerViewedAt > 0L && timerExpiresAt > System.currentTimeMillis()
+
+    var countdownSeconds by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(timerViewedAt, timerExpiresAt) {
+        if (timerViewedAt > 0L && timerExpiresAt > System.currentTimeMillis()) {
+            while (true) {
+                val remaining = (timerExpiresAt - System.currentTimeMillis()) / 1000
+                if (remaining <= 0) {
+                    countdownSeconds = 0
+                    break
+                }
+                countdownSeconds = remaining
+                delay(1000)
+            }
+        } else {
+            countdownSeconds = 0
+        }
+    }
+
+    val displayMinutes = (countdownSeconds / 60).toInt()
+    val displaySeconds = (countdownSeconds % 60).toInt()
+
+    var timerTriggered by remember { mutableStateOf(false) }
+
+    LaunchedEffect(hasDocuments, documents) {
+        if (hasDocuments && !timerTriggered) {
+            timerTriggered = true
+            val firstDoc = documents.firstOrNull()
+            if (firstDoc != null) {
+                viewModel.openDocument(firstDoc.documentId)
+            }
+        }
+    }
 
     if (uiState.isLoading) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(White),
+            modifier = Modifier.fillMaxSize().background(White),
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(color = PrimaryBlue)
@@ -130,12 +117,7 @@ fun PatientRecordDetailsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "Patient Record Details",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DarkText
-                    )
+                    Text("Patient Record Details", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = DarkText)
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -143,17 +125,22 @@ fun PatientRecordDetailsScreen(
                     }
                 },
                 actions = {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFFE8F5E9)
-                    ) {
-                        Text(
-                            text = "In Session",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = SuccessGreen
-                        )
+                    if (apptStatus == "in_session" || apptStatus == "active" || apptStatus == "in-progress") {
+                        Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFE8F5E9)) {
+                            Text(
+                                text = "In Session",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SuccessGreen
+                            )
+                        }
+                    } else if (apptStatus.isNotEmpty()) {
+                        Surface(shape = RoundedCornerShape(4.dp), color = MutedText.copy(alpha = 0.1f)) {
+                            Text(
+                                text = apptStatus.replaceFirstChar { it.uppercase() },
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MutedText
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = White)
@@ -170,7 +157,6 @@ fun PatientRecordDetailsScreen(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Patient Info Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -178,67 +164,48 @@ fun PatientRecordDetailsScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // Name + Blood Group
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = patientName,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DarkText
-                        )
+                        Text(text = patientName, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = DarkText)
                         if (bloodGroup != "N/A") {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = EmergencyRed
-                            ) {
+                            Surface(shape = RoundedCornerShape(12.dp), color = EmergencyRed) {
                                 Text(
                                     text = bloodGroup,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = White
+                                    fontSize = 14.sp, fontWeight = FontWeight.Bold, color = White
                                 )
                             }
                         }
                     }
-
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    // Details grid
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
                             Text(text = "Age/Sex", fontSize = 12.sp, color = MutedText)
                             Text(text = ageDisplay, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
                         }
                         Column {
-                            Text(text = "Slot", fontSize = 12.sp, color = MutedText)
-                            Text(text = slotDisplay, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
+                            Text(text = "Date & Time", fontSize = 12.sp, color = MutedText)
+                            Text(
+                                text = if (apptDate.isNotEmpty() && apptTime.isNotEmpty()) "$apptDate $apptTime" else "N/A",
+                                fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText
+                            )
                         }
                     }
-
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
                             Text(text = "Phone", fontSize = 12.sp, color = MutedText)
                             Text(text = phone, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
                         }
                         Column {
-                            Text(text = "Emergency", fontSize = 12.sp, color = MutedText)
-                            Text(text = emergencyName, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
-                            if (emergencyPhone.isNotEmpty()) {
-                                Text(text = "($emergencyPhone)", fontSize = 12.sp, color = SecondaryText)
-                            }
+                            Text(text = "Status", fontSize = 12.sp, color = MutedText)
+                            Text(
+                                text = apptStatus.replaceFirstChar { it.uppercase() },
+                                fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText
+                            )
                         }
                     }
                 }
@@ -246,65 +213,57 @@ fun PatientRecordDetailsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Temporary Security Access Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = White),
-                border = BorderStroke(2.dp, EmergencyRed)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = EmergencyRed.copy(alpha = 0.1f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            if (hasDocuments) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = White),
+                    border = BorderStroke(2.dp, if (timerActive) EmergencyRed else MutedText)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (timerActive) EmergencyRed.copy(alpha = 0.1f) else MutedText.copy(alpha = 0.1f)
                         ) {
-                            Icon(
-                                Icons.Default.Timer,
-                                contentDescription = null,
-                                tint = EmergencyRed,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Column {
-                                Text(
-                                    text = "Temporary Security Access",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = EmergencyRed
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = if (timerActive) EmergencyRed else MutedText,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Text(
-                                    text = "Expires in: ${String.format("%02d:%02d", minutes, seconds)} Mins",
-                                    fontSize = 12.sp,
-                                    color = EmergencyRed
-                                )
+                                Column {
+                                    Text(
+                                        text = if (timerActive) "Temporary Security Access" else "Access Pending",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (timerActive) EmergencyRed else MutedText
+                                    )
+                                    Text(
+                                        text = if (timerActive) "Expires in: ${String.format("%02d:%02d", displayMinutes, displaySeconds)}" else "Timer starts when files are accessed",
+                                        fontSize = 12.sp,
+                                        color = if (timerActive) EmergencyRed else SecondaryText
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Restricted Documents
-                    Text(
-                        text = "RESTRICTED DOCUMENTS",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DarkText,
-                        letterSpacing = 0.5.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (documents.isEmpty()) {
                         Text(
-                            text = "No documents shared for this appointment",
-                            fontSize = 13.sp,
-                            color = MutedText
+                            text = "RESTRICTED DOCUMENTS",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkText,
+                            letterSpacing = 0.5.sp
                         )
-                    } else {
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         documents.forEachIndexed { index, doc ->
                             val fileName = doc.fileNames.firstOrNull() ?: "Document"
                             val isScan = fileName.lowercase().let {
@@ -313,7 +272,16 @@ fun PatientRecordDetailsScreen(
                             DocumentRow(
                                 fileName = fileName,
                                 fileType = if (isScan) "SCAN" else "LAB REPORT",
-                                typeColor = if (isScan) WarningOrange else PrimaryBlue
+                                typeColor = if (isScan) WarningOrange else PrimaryBlue,
+                                onView = {
+                                    scope.launch {
+                                        viewModel.getDocumentUrl(doc.documentId)?.let { url ->
+                                            context.startActivity(
+                                                Intent(Intent.ACTION_VIEW, url.toUri())
+                                            )
+                                        }
+                                    }
+                                }
                             )
                             if (index < documents.lastIndex) {
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -321,17 +289,39 @@ fun PatientRecordDetailsScreen(
                         }
                     }
                 }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.FolderOff,
+                            contentDescription = null,
+                            tint = MutedText,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(text = "No documents shared", fontSize = 14.sp, color = MutedText)
+                        Text(
+                            text = "Patient has not shared any records for this appointment",
+                            fontSize = 12.sp, color = SecondaryText
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // View & edit full patient profile + records
             patientId?.let { pid ->
                 OutlinedButton(
                     onClick = { onViewFullProfile(pid) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryBlue),
                     border = BorderStroke(1.dp, PrimaryBlue)
@@ -340,8 +330,7 @@ fun PatientRecordDetailsScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "View & Edit Full Profile / Records",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 16.sp, fontWeight = FontWeight.Bold
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -349,24 +338,30 @@ fun PatientRecordDetailsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Complete Consultation Button
             Button(
-                onClick = { },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
+                onClick = {
+                    viewModel.completeAppointment(appointmentId) { ok, _ ->
+                        if (ok) {
+                            scope.launch {
+                                delay(300)
+                                onBack()
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = SuccessGreen,
+                    containerColor = if (apptStatus == "completed") MutedText else SuccessGreen,
                     contentColor = White
                 ),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(8.dp),
+                enabled = apptStatus != "completed" && apptStatus != "cancelled"
             ) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Complete Consultation & Close Session",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    text = if (apptStatus == "completed") "Consultation Completed" else "Complete Consultation & Close Session",
+                    fontSize = 16.sp, fontWeight = FontWeight.Bold
                 )
             }
 
@@ -379,11 +374,13 @@ fun PatientRecordDetailsScreen(
 private fun DocumentRow(
     fileName: String,
     fileType: String,
-    typeColor: Color
+    typeColor: Color,
+    onView: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onView)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -395,30 +392,15 @@ private fun DocumentRow(
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = fileName,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = DarkText
-            )
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = typeColor.copy(alpha = 0.1f)
-            ) {
+            Text(text = fileName, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = DarkText)
+            Surface(shape = RoundedCornerShape(4.dp), color = typeColor.copy(alpha = 0.1f)) {
                 Text(
                     text = fileType,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = typeColor
+                    fontSize = 10.sp, fontWeight = FontWeight.Bold, color = typeColor
                 )
             }
         }
-        Text(
-            text = "View",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = PrimaryBlue
-        )
+        Text(text = "View", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
     }
 }

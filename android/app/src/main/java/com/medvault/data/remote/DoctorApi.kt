@@ -34,6 +34,9 @@ interface DoctorApi {
         @Query("specialization") specialization: String? = null
     ): ApiResponse<List<DoctorSearchResult>>
 
+    @GET("api/v1/doctors/{doctorUid}")
+    suspend fun getDoctor(@Path("doctorUid") doctorUid: String): ApiResponse<DoctorSearchResult>
+
     @GET("api/v1/doctors/{doctorUid}/slots")
     suspend fun getDoctorSlots(@Path("doctorUid") doctorUid: String): ApiResponse<List<Map<String, Any>>>
 
@@ -43,7 +46,19 @@ interface DoctorApi {
     @PUT("api/v1/me/schedule")
     suspend fun updateMySchedule(@Body request: UpdateDoctorScheduleRequest): ApiResponse<Map<String, Any>>
 
-    @POST("api/v1/doctors/me/publish-next-week")
+    @GET("api/v1/me/status")
+    suspend fun getMyStatus(): ApiResponse<Map<String, Any>>
+
+    @PUT("api/v1/me/status")
+    suspend fun setMyStatus(@Body request: Map<String, Boolean>): ApiResponse<Map<String, Any>>
+
+    @GET("api/v1/me/slots")
+    suspend fun getMySlots(): ApiResponse<List<Map<String, Any>>>
+
+    @DELETE("api/v1/me/slots/{slotId}")
+    suspend fun deleteSlot(@Path("slotId") slotId: String): ApiResponse<Map<String, Any>>
+
+    @POST("api/v1/me/publish-next-week")
     suspend fun publishNextWeek(@Body request: PublishNextWeekRequest): ApiResponse<Map<String, Any>>
 
     @GET("api/v1/doctors/patients/{patientUid}")

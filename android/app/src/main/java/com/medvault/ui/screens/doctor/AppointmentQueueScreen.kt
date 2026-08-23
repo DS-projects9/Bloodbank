@@ -18,22 +18,32 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.medvault.ui.theme.*
 import com.medvault.viewmodel.DoctorViewModel
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppointmentQueueScreen(
     onBack: () -> Unit,
     onPatientSelected: (String) -> Unit,
+    onNavigateToProfile: () -> Unit = {},
     viewModel: DoctorViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Today (${uiState.appointments.size})", "Tomorrow", "Upcoming")
+    val today = java.time.LocalDate.now().toString()
+    val tomorrow = java.time.LocalDate.now().plusDays(1).toString()
+    val tabs = listOf(
+        "Today (${uiState.appointments.count { it["date"]?.toString() == today }})",
+        "Tomorrow (${uiState.appointments.count { it["date"]?.toString() == tomorrow }})",
+        "Upcoming (${uiState.appointments.count { (it["date"]?.toString() ?: "") > tomorrow }})"
+    )
 
     val currentAppointments = when (selectedTab) {
-        0 -> uiState.appointments
-        else -> emptyList()
+        0 -> uiState.appointments.filter { it["date"]?.toString() == today }
+        1 -> uiState.appointments.filter { it["date"]?.toString() == tomorrow }
+        else -> uiState.appointments.filter { (it["date"]?.toString() ?: "") > tomorrow }
     }
 
     var selectedNavIndex by remember { mutableIntStateOf(1) }
@@ -72,7 +82,7 @@ fun AppointmentQueueScreen(
                     icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
                     label = { Text("Profile") },
                     selected = selectedNavIndex == 2,
-                    onClick = { },
+                    onClick = { onNavigateToProfile() },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = PrimaryBlue,
                         selectedTextColor = PrimaryBlue,
@@ -89,7 +99,7 @@ fun AppointmentQueueScreen(
                 .background(White)
                 .padding(paddingValues)
         ) {
-            // Header with icons
+            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -99,18 +109,18 @@ fun AppointmentQueueScreen(
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
-                        Icons.Default.Refresh,
-                        contentDescription = "Refresh",
+                        Icons.Default.ArrowBack,
+                        contentDescription = "Back",
                         tint = DarkText
                     )
                 }
-                IconButton(onClick = { }) {
-                    Icon(
-                        Icons.Default.CalendarMonth,
-                        contentDescription = "Calendar",
-                        tint = PrimaryBlue
-                    )
-                }
+                Text(
+                    text = "Appointment Queue",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkText
+                )
+                Spacer(modifier = Modifier.size(48.dp))
             }
 
             // Tabs
@@ -151,19 +161,22 @@ fun AppointmentQueueScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(currentAppointments) { appointment ->
-                        val id = appointment["id"]?.toString() ?: ""
+                        val id = appointment["appointmentId"]?.toString() ?: appointment["id"]?.toString() ?: ""
+                        val patientUid = appointment["patientUid"]?.toString() ?: ""
                         val patientName = appointment["patientName"]?.toString() ?: "Unknown"
                         val time = appointment["time"]?.toString() ?: ""
+                        val date = appointment["date"]?.toString() ?: ""
                         val age = (appointment["age"] as? Number)?.toInt() ?: 0
                         val gender = appointment["gender"]?.toString() ?: ""
                         val bloodGroup = appointment["bloodGroup"]?.toString() ?: ""
                         val hasSharedRecords = appointment["hasSharedRecords"] as? Boolean ?: false
                         val sharedRecordCount = (appointment["sharedRecordCount"] as? Number)?.toInt() ?: 0
-                        val isCompleted = appointment["isCompleted"] as? Boolean ?: false
+                        val isCompleted = appointment["status"]?.toString() == "completed"
 
                         QueueAppointmentCard(
                             patientName = patientName,
                             time = time,
+                            date = date,
                             age = age,
                             gender = gender,
                             bloodGroup = bloodGroup,
@@ -184,6 +197,7 @@ fun AppointmentQueueScreen(
 private fun QueueAppointmentCard(
     patientName: String,
     time: String,
+    date: String,
     age: Int,
     gender: String,
     bloodGroup: String,
@@ -222,17 +236,31 @@ private fun QueueAppointmentCard(
                         color = PrimaryBlue
                     )
                 } else {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = LightBlue
-                    ) {
-                        Text(
-                            text = time,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PrimaryBlue
-                        )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = LightBlue
+                        ) {
+                            Text(
+                                text = time,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PrimaryBlue
+                            )
+                        }
+                        if (date.isNotEmpty()) {
+                            val formattedDate = try {
+                                val ld = java.time.LocalDate.parse(date)
+                                ld.format(DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH))
+                            } catch (_: Exception) { date }
+                            Text(
+                                text = formattedDate,
+                                fontSize = 11.sp,
+                                color = SecondaryText,
+                                modifier = Modifier.padding(top = 2.dp, end = 2.dp)
+                            )
+                        }
                     }
                 }
             }

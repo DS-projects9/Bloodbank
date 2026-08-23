@@ -1,6 +1,7 @@
 package com.medvault.ui.screens.patient
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +23,7 @@ import com.medvault.viewmodel.PatientViewModel
 @Composable
 fun PatientAppointmentsScreen(
     onBack: () -> Unit,
+    onNavigateToHealthVault: (appointmentId: String, doctorUid: String, doctorName: String?) -> Unit,
     viewModel: PatientViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -121,10 +123,13 @@ fun PatientAppointmentsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(currentList) { appointment ->
-                        val doctorUid = (appointment["doctorUid"] as? String) ?: "Unknown Doctor"
+                        val appointmentId = (appointment["appointmentId"] as? String) ?: ""
+                        val doctorUid = (appointment["doctorUid"] as? String) ?: ""
+                        val doctor = uiState.doctorProfiles[doctorUid]
                         val date = (appointment["date"] as? String) ?: ""
                         val time = (appointment["time"] as? String) ?: ""
                         val status = (appointment["status"] as? String) ?: ""
+                        val patientNote = (appointment["patientNote"] as? String) ?: ""
 
                         val displayStatus = when (status) {
                             "locked" -> "Pending"
@@ -134,11 +139,19 @@ fun PatientAppointmentsScreen(
                             else -> status.replaceFirstChar { it.uppercase() }
                         }
 
+                        val canAddDocument = status in listOf("locked", "confirmed")
+
                         AppointmentCard(
-                            doctorUid = doctorUid,
+                            doctorName = doctor?.name ?: (if (doctorUid.isNotBlank()) "Doctor" else "Unknown Doctor"),
+                            specialization = doctor?.specialization,
+                            hospitalName = doctor?.hospitalName,
+                            patientNote = patientNote,
                             date = date,
                             time = time,
-                            status = displayStatus
+                            status = displayStatus,
+                            onAddDocument = if (canAddDocument && appointmentId.isNotBlank()) {
+                                { onNavigateToHealthVault(appointmentId, doctorUid, doctor?.name) }
+                            } else null
                         )
                     }
                 }
@@ -149,10 +162,14 @@ fun PatientAppointmentsScreen(
 
 @Composable
 private fun AppointmentCard(
-    doctorUid: String,
+    doctorName: String,
+    specialization: String?,
+    hospitalName: String?,
+    patientNote: String?,
     date: String,
     time: String,
-    status: String
+    status: String,
+    onAddDocument: (() -> Unit)? = null
 ) {
     val statusColor = when (status) {
         "Confirmed" -> SuccessGreen
@@ -161,6 +178,13 @@ private fun AppointmentCard(
         "Cancelled" -> EmergencyRed
         else -> SecondaryText
     }
+
+    val initials = doctorName
+        .split(" ")
+        .filter { it.isNotBlank() }
+        .take(2)
+        .joinToString("") { it.take(1).uppercase() }
+        .ifEmpty { "Dr" }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -180,7 +204,7 @@ private fun AppointmentCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = doctorUid.takeLast(2),
+                        text = initials,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = White
@@ -189,11 +213,30 @@ private fun AppointmentCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = doctorUid,
+                        text = doctorName,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = DarkText
                     )
+                    specialization?.takeIf { it.isNotBlank() }?.let {
+                        Text(
+                            text = it,
+                            fontSize = 12.sp,
+                            color = SecondaryText
+                        )
+                    }
+                    hospitalName?.takeIf { it.isNotBlank() }?.let {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = SecondaryText,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(it, fontSize = 12.sp, color = SecondaryText)
+                        }
+                    }
                 }
                 AssistChip(
                     onClick = { },
@@ -219,6 +262,28 @@ private fun AppointmentCard(
                     Icon(Icons.Default.AccessTime, contentDescription = null, tint = SecondaryText, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(time, fontSize = 12.sp, color = SecondaryText)
+                }
+            }
+            patientNote?.takeIf { it.isNotBlank() }?.let { note ->
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Note: $note",
+                    fontSize = 12.sp,
+                    color = MutedText
+                )
+            }
+            onAddDocument?.let {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = it,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryBlue),
+                    border = BorderStroke(1.dp, PrimaryBlue),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add document", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }

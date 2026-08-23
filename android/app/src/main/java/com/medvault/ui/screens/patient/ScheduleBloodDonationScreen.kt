@@ -11,7 +11,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
+import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import com.medvault.viewmodel.PatientViewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -19,26 +24,45 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.medvault.ui.theme.*
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableIntStateOf
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleBloodDonationScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: PatientViewModel = hiltViewModel()
 ) {
     var fullName by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
     var selectedBloodGroup by remember { mutableStateOf<String?>(null) }
-    var selectedBank by remember { mutableStateOf("City Central Blood Bank (2.4 km away)") }
+    var selectedBankIndex by remember { mutableIntStateOf(-1) }
     var selectedTimeSlot by remember { mutableStateOf<String?>(null) }
     var bankExpanded by remember { mutableStateOf(false) }
+    var isBooking by remember { mutableStateOf(false) }
+    var isBooked by remember { mutableStateOf(false) }
+
+    val uiState by viewModel.uiState.collectAsState()
+    val bloodBanks = uiState.bloodBanks
+
+    LaunchedEffect(Unit) {
+        viewModel.loadBloodBanks()
+    }
+
+    val scope = rememberCoroutineScope()
+
+    fun convertTo24Hour(time: String): String {
+        val cleaned = time.trim()
+        val isPm = cleaned.endsWith("PM", ignoreCase = true)
+        val (hStr, mStr) = cleaned.substringBefore(" ").split(":")
+        var hour = hStr.toIntOrNull() ?: 0
+        if (isPm && hour != 12) hour += 12
+        if (!isPm && hour == 12) hour = 0
+        return "%02d:%02d".format(hour, mStr.toIntOrNull() ?: 0)
+    }
 
     val bloodGroups = listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
     val timeSlots = listOf("09:00 AM", "11:30 AM", "02:00 PM", "04:30 PM")
-    val bloodBanks = listOf(
-        "City Central Blood Bank (2.4 km away)",
-        "Red Cross Blood Bank (5.1 km away)",
-        "Metro Hospital Blood Bank (7.8 km away)"
-    )
 
     Scaffold(
         topBar = {
@@ -66,11 +90,15 @@ fun ScheduleBloodDonationScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(White)
                 .padding(paddingValues)
+        ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
@@ -179,8 +207,11 @@ fun ScheduleBloodDonationScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Box {
+                val displayText = if (selectedBankIndex >= 0 && selectedBankIndex < bloodBanks.size) {
+                    bloodBanks[selectedBankIndex]["name"] as? String ?: ""
+                } else ""
                 OutlinedTextField(
-                    value = selectedBank,
+                    value = displayText,
                     onValueChange = {},
                     modifier = Modifier
                         .fillMaxWidth()
@@ -188,6 +219,7 @@ fun ScheduleBloodDonationScreen(
                     shape = RoundedCornerShape(8.dp),
                     readOnly = true,
                     enabled = false,
+                    placeholder = { Text("Choose from ${bloodBanks.size} banks", color = SecondaryText) },
                     trailingIcon = {
                         Icon(
                             Icons.Default.ArrowDropDown,
@@ -207,16 +239,28 @@ fun ScheduleBloodDonationScreen(
                     expanded = bankExpanded,
                     onDismissRequest = { bankExpanded = false }
                 ) {
-                    bloodBanks.forEach { bank ->
+                    bloodBanks.forEachIndexed { index, bank ->
+                        val name = bank["name"] as? String ?: "Unknown"
+                        val address = bank["address"] as? String ?: ""
                         DropdownMenuItem(
                             text = {
-                                Text(
-                                    text = bank,
-                                    color = if (bank == selectedBank) PrimaryBlue else DarkText
-                                )
+                                Column {
+                                    Text(
+                                        text = name,
+                                        color = if (index == selectedBankIndex) PrimaryBlue else DarkText,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (address.isNotBlank()) {
+                                        Text(
+                                            text = address,
+                                            fontSize = 12.sp,
+                                            color = SecondaryText
+                                        )
+                                    }
+                                }
                             },
                             onClick = {
-                                selectedBank = bank
+                                selectedBankIndex = index
                                 bankExpanded = false
                             }
                         )
@@ -277,7 +321,33 @@ fun ScheduleBloodDonationScreen(
 
             // Confirm Button
             Button(
-                onClick = { },
+                onClick = {
+                    val time = selectedTimeSlot ?: return@Button
+                    val group = selectedBloodGroup ?: return@Button
+                    if (selectedBankIndex < 0 || selectedBankIndex >= bloodBanks.size) return@Button
+                    val bank = bloodBanks[selectedBankIndex]
+                    val bankName = bank["name"] as? String ?: return@Button
+                    val bankAddress = bank["address"] as? String ?: ""
+                    val today = java.time.LocalDate.now().toString()
+                    val time24 = convertTo24Hour(time)
+                    isBooking = true
+                    viewModel.scheduleBloodDonation(
+                        bloodGroup = group,
+                        scheduledDate = today,
+                        scheduledTime = time24,
+                        hospitalName = bankName,
+                        hospitalAddress = bankAddress
+                    ) { ok, _ ->
+                        isBooking = false
+                        if (ok) {
+                            isBooked = true
+                            scope.launch {
+                                delay(2000)
+                                onBack()
+                            }
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -286,16 +356,92 @@ fun ScheduleBloodDonationScreen(
                     contentColor = White
                 ),
                 shape = RoundedCornerShape(8.dp),
-                enabled = fullName.isNotBlank() && phoneNumber.isNotBlank() && selectedBloodGroup != null && selectedTimeSlot != null
+                enabled = fullName.isNotBlank() && phoneNumber.isNotBlank() && selectedBloodGroup != null && selectedBankIndex >= 0 && selectedTimeSlot != null && !isBooking && !isBooked
             ) {
-                Text(
-                    text = "Confirm & Notify Blood Bank",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (isBooking) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "Confirm & Notify Blood Bank",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+
+        if (isBooking) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = White)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(color = PrimaryBlue)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Booking your slot…",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkText
+                        )
+                    }
+                }
+            }
+        }
+
+        if (isBooked) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = White)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = SuccessGreen,
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Slot Booked!",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkText
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Your donation slot is confirmed and the blood bank has been notified.",
+                            fontSize = 14.sp,
+                            color = SecondaryText
+                        )
+                    }
+                }
+            }
+        }
     }
+}
 }

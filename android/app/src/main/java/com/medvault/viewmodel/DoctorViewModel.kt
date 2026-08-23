@@ -2,13 +2,15 @@ package com.medvault.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.firebase.auth.FirebaseAuth
 import com.medvault.data.remote.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -24,13 +26,17 @@ data class DoctorUiState(
     val selectedPatient: Map<String, Any>? = null,
     val selectedAppointment: Map<String, Any>? = null,
     val patientDocuments: List<VaultDocument> = emptyList(),
-    val publishedSlotCount: Int = 0
+    val publishedSlotCount: Int = 0,
+    val slots: List<Map<String, Any>> = emptyList(),
+    val clinicOpen: Boolean = true,
+    val timerViewedAt: Long = 0,
+    val timerExpiresAt: Long = 0,
+    val timerDurationSeconds: Long = 0,
 )
 
 @HiltViewModel
 class DoctorViewModel @Inject constructor(
     private val apiClient: ApiClient,
-    private val auth: FirebaseAuth
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DoctorUiState())
@@ -39,11 +45,38 @@ class DoctorViewModel @Inject constructor(
     init {
         loadProfile()
         loadSchedule()
+        loadMySlots()
+        loadStatus()
         loadAppointments()
     }
 
+    fun loadStatus() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    apiClient.doctorApi.getMyStatus()
+                }
+                val open = (response.data?.get("open") as? Boolean) ?: true
+                _uiState.value = _uiState.value.copy(clinicOpen = open)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message)
+            }
+        }
+    }
+
+    fun setStatus(open: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                apiClient.doctorApi.setMyStatus(mapOf("open" to open))
+                _uiState.value = _uiState.value.copy(clinicOpen = open)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message)
+            }
+        }
+    }
+
     fun loadProfile() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 val response = apiClient.userApi.getMe()
@@ -58,9 +91,11 @@ class DoctorViewModel @Inject constructor(
     }
 
     fun loadSchedule() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = apiClient.doctorApi.getMySchedule()
+                val response = withContext(Dispatchers.IO) {
+                    apiClient.doctorApi.getMySchedule()
+                }
                 _uiState.value = _uiState.value.copy(scheduleConfig = response.data)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
@@ -68,43 +103,66 @@ class DoctorViewModel @Inject constructor(
         }
     }
 
-    fun updateSchedule(slots: List<SlotUpdate>) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+    fun loadMySlots() {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                apiClient.doctorApi.updateMySchedule(UpdateDoctorScheduleRequest(slots = slots))
+                val response = withContext(Dispatchers.IO) {
+                    apiClient.doctorApi.getMySlots()
+                }
+                _uiState.value = _uiState.value.copy(slots = response.data ?: emptyList())
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message)
+            }
+        }
+    }
+
+    fun deleteSlot(slotId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            try {
+                apiClient.doctorApi.deleteSlot(slotId)
                 _uiState.value = _uiState.value.copy(isLoading = false)
-                loadSchedule()
+                loadMySlots()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
         }
     }
 
-    fun publishNextWeek(slots: List<SlotUpdate>) {
-        viewModelScope.launch {
+    fun publishSlots(slots: List<SlotUpdate>, weekStart: String) {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            val startMs = System.currentTimeMillis()
             try {
-                val nextMonday = LocalDate.now().with(DayOfWeek.MONDAY).plusWeeks(1)
-                val response = apiClient.doctorApi.publishNextWeek(
-                    PublishNextWeekRequest(weekStart = nextMonday.toString(), slots = slots)
-                )
-                val count = (response.data?.get("slotsCreated") as? Number)?.toInt() ?: 0
+                val count = withContext(Dispatchers.IO) {
+                    apiClient.doctorApi.updateMySchedule(UpdateDoctorScheduleRequest(slots = slots))
+                    val response = apiClient.doctorApi.publishNextWeek(
+                        PublishNextWeekRequest(weekStart = weekStart, slots = slots)
+                    )
+                    (response.data?.get("slotsCreated") as? Number)?.toInt() ?: 0
+                }
+                val elapsed = System.currentTimeMillis() - startMs
+                if (elapsed < 800) delay(800 - elapsed)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     publishedSlotCount = count,
                     error = null
                 )
+                loadSchedule()
+                loadMySlots()
             } catch (e: Exception) {
+                android.util.Log.e("DoctorViewModel", "Error in publishSlots", e)
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
         }
     }
 
     fun loadAppointments() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = apiClient.appointmentApi.getMyAppointments()
+                val response = withContext(Dispatchers.IO) {
+                    apiClient.appointmentApi.getMyAppointments()
+                }
                 _uiState.value = _uiState.value.copy(appointments = response.data ?: emptyList())
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
@@ -113,7 +171,7 @@ class DoctorViewModel @Inject constructor(
     }
 
     fun confirmAppointment(appointmentId: String, diagnosis: String? = null, followUpDate: String? = null) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 apiClient.appointmentApi.confirmAppointment(
@@ -132,7 +190,7 @@ class DoctorViewModel @Inject constructor(
     }
 
     fun cancelAppointment(appointmentId: String, reason: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 apiClient.appointmentApi.cancelAppointment(
                     CancelAppointmentRequest(appointmentId = appointmentId, reason = reason)
@@ -144,12 +202,27 @@ class DoctorViewModel @Inject constructor(
         }
     }
 
+    fun completeAppointment(appointmentId: String, onComplete: (Boolean, String?) -> Unit = { _, _ -> }) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            try {
+                apiClient.appointmentApi.completeAppointment(appointmentId)
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                loadAppointments()
+                withContext(Dispatchers.Main) { onComplete(true, null) }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+                withContext(Dispatchers.Main) { onComplete(false, e.message) }
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
 
     fun loadAppointmentDetails(appointmentId: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
                 val response = apiClient.appointmentApi.getAppointment(appointmentId)
@@ -158,18 +231,50 @@ class DoctorViewModel @Inject constructor(
                     selectedAppointment = appointment,
                     isLoading = false
                 )
-                val patientId = appointment?.get("patientId") as? String
+                val patientId = appointment?.get("patientUid") as? String
                 if (patientId != null) {
                     loadPatientDocuments(patientId)
                 }
+                loadSharedFiles(appointmentId)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
         }
     }
 
+    fun loadSharedFiles(appointmentId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = apiClient.appointmentApi.getSharedFiles(appointmentId)
+                val docs = response.data?.mapNotNull { toVaultDocument(it) } ?: emptyList()
+                _uiState.value = _uiState.value.copy(patientDocuments = docs)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message)
+            }
+        }
+    }
+
+    fun openDocument(documentId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = apiClient.vaultApi.openDocument(documentId)
+                val data = response.data ?: emptyMap()
+                val viewedAt = (data["viewedAt"] as? Number)?.toLong() ?: 0L
+                val expiresAt = (data["expiresAt"] as? Number)?.toLong() ?: 0L
+                val durationSec = (data["durationMinutes"] as? Number)?.toLong()?.times(60) ?: 0L
+                _uiState.value = _uiState.value.copy(
+                    timerViewedAt = viewedAt,
+                    timerExpiresAt = expiresAt,
+                    timerDurationSeconds = durationSec,
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = e.message)
+            }
+        }
+    }
+
     private fun loadPatientDocuments(patientId: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val response = apiClient.vaultApi.getDocuments()
                 val docs = response.data?.filter { doc ->
@@ -185,7 +290,7 @@ class DoctorViewModel @Inject constructor(
     }
 
     fun loadPatient(patientUid: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 val response = apiClient.doctorApi.getPatient(patientUid)
@@ -215,6 +320,10 @@ class DoctorViewModel @Inject constructor(
             ownerUid = str("ownerUid"),
             sharedWith = strList("sharedWith"),
             fileNames = strList("fileNames"),
+            appointmentId = str("appointmentId").ifEmpty { null },
+            status = str("status").ifEmpty { "active" },
+            durationMinutes = (map["durationMinutes"] as? Number)?.toLong() ?: 0,
+            viewedAt = (map["viewedAt"] as? Number)?.toLong() ?: 0,
             createdAt = (map["createdAt"] as? Number)?.toLong() ?: 0,
             expiresAt = (map["expiresAt"] as? Number)?.toLong() ?: 0
         )
@@ -228,7 +337,7 @@ class DoctorViewModel @Inject constructor(
         city: String? = null,
         dob: String? = null
     ) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 apiClient.doctorApi.updatePatient(

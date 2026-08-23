@@ -21,6 +21,11 @@ data class DoctorSearchResult(
     val availableSlots: Int = 0,
 )
 
+@Serializable
+data class SetStatusRequest(
+    val open: Boolean
+)
+
 fun Route.doctorRoutes() {
     route("/doctors") {
         get("/search") {
@@ -48,6 +53,14 @@ fun Route.doctorRoutes() {
                 .groupingBy { (it["doctorUid"] as? String) ?: "" }
                 .eachCount()
 
+            // Exclude doctors who toggled their clinic off for today.
+            val closedUids = FirestoreAdapter.queryRaw("doctor_status", emptyList(), limit = 5000)
+                .mapNotNull { snap ->
+                    val d = snap.data as? Map<String, Any?>
+                    if ((d?.get("open") as? Boolean) == false) snap.id else null
+                }
+                .toSet()
+
             val results = docs.map { snap ->
                 val d = (snap.data as? Map<String, Any?>) ?: emptyMap<String, Any?>()
                 val id = snap.id
@@ -64,7 +77,32 @@ fun Route.doctorRoutes() {
                     availableSlots = slotCounts[uid] ?: 0
                 )
             }
-            call.respond(success(results))
+            call.respond(success(results.filter { it.uid !in closedUids }))
+        }
+
+        get("/{doctorUid}") {
+            val auth = call.requireAuth()
+            val doctorUid = call.parameters["doctorUid"]
+                ?: throw IllegalArgumentException("Doctor UID required")
+            val d = FirestoreAdapter.getRaw("users", doctorUid)
+                ?: throw IllegalArgumentException("Doctor not found")
+            val uid = (d["uid"] as? String)?.takeIf { it.isNotBlank() } ?: doctorUid
+            val name = (d["name"] as? String)?.takeIf { it.isNotBlank() }
+                ?: (d["displayName"] as? String) ?: "Unknown Doctor"
+            call.respond(
+                success(
+                    mapOf(
+                        "uid" to uid,
+                        "name" to name,
+                        "specialization" to (d["specialization"] as? String ?: ""),
+                        "hospitalName" to (d["hospitalName"] as? String ?: ""),
+                        "hospitalAddress" to (d["hospitalAddress"] as? String ?: ""),
+                        "city" to (d["city"] as? String ?: ""),
+                        "photoUrl" to (d["photoUrl"] as? String ?: ""),
+                        "availableSlots" to 0,
+                    )
+                )
+            )
         }
 
         get("/{doctorUid}/slots") {
@@ -163,6 +201,26 @@ fun Route.doctorRoutes() {
         }
     }
 
+    route("/me/status") {
+        get {
+            val auth = call.requireAuth()
+            val doc = FirestoreAdapter.get<Map<String, Any?>>("doctor_status", auth.uid)
+            val open = (doc?.get("open") as? Boolean) ?: true
+            call.respond(success(mapOf("open" to open)))
+        }
+
+        put {
+            val auth = call.requireAuth()
+            val req = call.receive<SetStatusRequest>()
+            FirestoreAdapter.setRaw("doctor_status", auth.uid, mapOf(
+                "doctorUid" to auth.uid,
+                "open" to req.open,
+                "updatedAt" to System.currentTimeMillis(),
+            ))
+            call.respond(success(mapOf("open" to req.open)))
+        }
+    }
+
     post("/me/publish-next-week") {
         val auth = call.requireAuth()
         val req = call.receive<PublishNextWeekRequest>()
@@ -177,13 +235,13 @@ fun Route.doctorRoutes() {
         } ?: run {
             val config = FirestoreAdapter.get<Map<String, Any?>>("schedule_config", auth.uid)
                 ?: throw IllegalStateException("No schedule configured")
-            (config["slots"] as? List<*>) ?: emptyList<Any?>()
+            (config["slots"] as? List<*>)?.filterIsInstance<Map<String, Any?>>()
+                ?: emptyList()
         }
 
         val weekStart = java.time.LocalDate.parse(req.weekStart)
 
-        val firestore = com.medvault.config.FirebaseProvider.firestore()
-        var batch = firestore.batch()
+        var batch = FirestoreAdapter.batch()
         var count = 0
         var ops = 0
 
@@ -191,7 +249,7 @@ fun Route.doctorRoutes() {
             val date = weekStart.plusDays(dayOffset.toLong())
             val dayName = date.dayOfWeek.name
 
-            val matchingSlots = slotConfigs.filter { (it as? Map<*, *>)?.get("day") == dayName }
+            val matchingSlots = slotConfigs.filter { (it as? Map<*, *>)?.get("day")?.toString()?.equals(dayName, ignoreCase = true) == true }
 
             for (slotConfig in matchingSlots) {
                 val slotMap = slotConfig as? Map<*, *> ?: continue
@@ -205,9 +263,9 @@ fun Route.doctorRoutes() {
 
                 var current = startMinutes
                 while (current + slotMinutes <= endMinutes) {
-                    val slotRef = firestore.collection("slots").document()
-                    batch.set(slotRef, mapOf(
-                        "slotId" to slotRef.id,
+                    val slotId = FirestoreAdapter.newId()
+                    batch.set("slots", slotId, mapOf(
+                        "slotId" to slotId,
                         "doctorUid" to auth.uid,
                         "date" to date.toString(),
                         "startTime" to minutesToTime(current),
@@ -219,16 +277,42 @@ fun Route.doctorRoutes() {
                     count++
                     ops++
                     if (ops >= 450) {
-                        batch.commit().get()
-                        batch = firestore.batch()
+                        batch.commit()
+                        batch = FirestoreAdapter.batch()
                         ops = 0
                     }
                 }
             }
         }
-        if (ops > 0) batch.commit().get()
+        if (ops > 0) batch.commit()
 
         call.respond(success(SlotsCreatedResponse(slotsCreated = count)))
+    }
+
+    get("/me/slots") {
+        val auth = call.requireAuth()
+        val slots = FirestoreAdapter.query<Map<String, Any?>>(
+            "slots",
+            listOf("doctorUid" to auth.uid),
+            limit = 1000
+        )
+        call.respondRaw(slots)
+    }
+
+    delete("/me/slots/{slotId}") {
+        val auth = call.requireAuth()
+        val slotId = call.parameters["slotId"] ?: throw IllegalArgumentException("Slot ID required")
+        val slot = FirestoreAdapter.get<Map<String, Any?>>("slots", slotId)
+            ?: throw IllegalArgumentException("Slot not found")
+        if ((slot["doctorUid"] as? String) != auth.uid) {
+            throw SecurityException("Not your slot")
+        }
+        val status = slot["status"] as? String
+        if (status == "locked" || status == "booked") {
+            throw IllegalStateException("Cannot remove a slot that is currently booked")
+        }
+        FirestoreAdapter.delete("slots", slotId)
+        call.respond(success(OkResponse()))
     }
 }
 
@@ -238,9 +322,14 @@ private fun parseTimeToMinutes(time: String): Int {
     val hour = parts[0].toIntOrNull() ?: 0
     val minutePart = parts[1]
     val isPm = minutePart.contains("PM", ignoreCase = true)
+    val isAm = minutePart.contains("AM", ignoreCase = true)
     val minute = minutePart.replace(Regex("(?i)[^0-9]"), "").toIntOrNull() ?: 0
-    var h = hour % 12
-    if (isPm) h += 12
+    val h = if (isPm || isAm) {
+        val base = hour % 12
+        if (isPm) base + 12 else base
+    } else {
+        hour
+    }
     return h * 60 + minute
 }
 

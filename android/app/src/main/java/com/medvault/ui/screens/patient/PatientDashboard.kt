@@ -44,11 +44,11 @@ fun PatientDashboard(
     onNavigateToBloodDonation: () -> Unit = {},
     onNavigateToAIAssistant: () -> Unit = {},
     onNavigateToEmergencyEscalation: () -> Unit = {},
+    onNavigateToBloodRequests: () -> Unit = {},
     viewModel: PatientViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    var donorOptIn by remember { mutableStateOf(false) }
     var selectedNavIndex by remember { mutableIntStateOf(0) }
 
     val pickContactLauncher = rememberLauncherForActivityResult(
@@ -178,7 +178,7 @@ fun PatientDashboard(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Donor Opt-In Card
+            // Blood Donation Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = White),
@@ -188,29 +188,15 @@ fun PatientDashboard(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Become a Blood Donor",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DarkText
-                        )
-                        Switch(
-                            checked = donorOptIn,
-                            onCheckedChange = { donorOptIn = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = White,
-                                checkedTrackColor = PrimaryBlue
-                            )
-                        )
-                    }
+                    Text(
+                        text = "Blood Donation",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkText
+                    )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Opt-in to emergency requests",
+                        text = "Schedule a blood donation slot",
                         fontSize = 12.sp,
                         color = MutedText
                     )
@@ -260,6 +246,59 @@ fun PatientDashboard(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // My Blood Requests Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = White),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                onClick = onNavigateToBloodRequests
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(EmergencyRed.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.ListAlt,
+                            contentDescription = null,
+                            tint = EmergencyRed,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "My Blood Requests",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkText
+                        )
+                        Text(
+                            text = "View and manage your sent requests",
+                            fontSize = 12.sp,
+                            color = MutedText
+                        )
+                    }
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = BorderColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

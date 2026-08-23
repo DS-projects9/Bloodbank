@@ -1,7 +1,6 @@
 package com.medvault.services
 
-import com.google.cloud.firestore.Firestore
-import com.medvault.config.FirebaseProvider
+import com.medvault.db.FirestoreAdapter
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
 import java.util.concurrent.TimeUnit
@@ -46,34 +45,29 @@ object SchedulerService {
     }
 
     private suspend fun expireLockedSlots(): Int {
-        val db = FirebaseProvider.firestore()
         val cutoff = System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(15)
 
-        val lockedSlots = db.collection("slots")
-            .whereEqualTo("status", "locked")
-            .get().get().documents
-
+        val lockedSlots = FirestoreAdapter.queryRaw("slots", listOf("status" to "locked"), limit = 5000)
         var count = 0
         for (slot in lockedSlots) {
-            val lockedAt = (slot.get("lockedAt") as? Number)?.toLong() ?: continue
+            val lockedAt = slot.getLong("lockedAt") ?: continue
             if (lockedAt < cutoff) {
-                slot.reference.update(mapOf(
-                    "status" to "available",
-                    "lockedBy" to null,
-                    "lockedAt" to null,
-                )).get()
+                FirestoreAdapter.setRaw(
+                    "slots", slot.id,
+                    mapOf("status" to "available", "lockedBy" to null, "lockedAt" to null),
+                )
 
                 val slotId = slot.id
-                val appts = db.collection("appointments")
-                    .whereEqualTo("slotId", slotId)
-                    .whereEqualTo("status", "locked")
-                    .get().get().documents
-
+                val appts = FirestoreAdapter.queryRaw(
+                    "appointments",
+                    listOf("slotId" to slotId, "status" to "locked"),
+                    limit = 100,
+                )
                 for (appt in appts) {
-                    appt.reference.update(mapOf(
-                        "status" to "expired",
-                        "expiredAt" to System.currentTimeMillis(),
-                    )).get()
+                    FirestoreAdapter.setRaw(
+                        "appointments", appt.id,
+                        mapOf("status" to "expired", "expiredAt" to System.currentTimeMillis()),
+                    )
                 }
                 count++
             }
@@ -82,21 +76,17 @@ object SchedulerService {
     }
 
     private suspend fun expirePendingBloodRequests(): Int {
-        val db = FirebaseProvider.firestore()
         val cutoff = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(24)
 
-        val pending = db.collection("blood_requests")
-            .whereEqualTo("status", "pending")
-            .get().get().documents
-
+        val pending = FirestoreAdapter.queryRaw("blood_requests", listOf("status" to "pending"), limit = 2000)
         var count = 0
         for (req in pending) {
-            val createdAt = (req.get("createdAt") as? Number)?.toLong() ?: continue
+            val createdAt = req.getLong("createdAt") ?: continue
             if (createdAt < cutoff) {
-                req.reference.update(mapOf(
-                    "status" to "expired",
-                    "expiredAt" to System.currentTimeMillis(),
-                )).get()
+                FirestoreAdapter.setRaw(
+                    "blood_requests", req.id,
+                    mapOf("status" to "expired", "expiredAt" to System.currentTimeMillis()),
+                )
                 count++
             }
         }
@@ -104,20 +94,14 @@ object SchedulerService {
     }
 
     private suspend fun expireVaultDocuments(): Int {
-        val db = FirebaseProvider.firestore()
         val now = System.currentTimeMillis()
 
-        val active = db.collection("vault")
-            .whereEqualTo("status", "active")
-            .get().get().documents
-
+        val active = FirestoreAdapter.queryRaw("vault", listOf("status" to "active"), limit = 2000)
         var count = 0
         for (doc in active) {
-            val expiresAt = (doc.get("expiresAt") as? Number)?.toLong() ?: continue
+            val expiresAt = doc.getLong("expiresAt") ?: continue
             if (expiresAt < now) {
-                doc.reference.update(mapOf(
-                    "status" to "expired",
-                )).get()
+                FirestoreAdapter.setRaw("vault", doc.id, mapOf("status" to "expired"))
                 count++
             }
         }

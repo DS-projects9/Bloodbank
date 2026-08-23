@@ -68,10 +68,15 @@ fun BloodDonationDash2Screen(
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Donation Eligibility", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = DarkText)
                         Spacer(modifier = Modifier.height(12.dp))
-                        EligibilityItem("Age 18-65 years", true)
-                        EligibilityItem("Weight above 50 kg", true)
-                        EligibilityItem("No recent illness", true)
-                        EligibilityItem("Hemoglobin above 12.5", false)
+                        val eligibilityItems = listOf(
+                            "Age 18-65 years" to true,
+                            "Weight above 50 kg" to true,
+                            "No recent illness" to true,
+                            "Hemoglobin above 12.5 g/dL" to true
+                        )
+                        eligibilityItems.forEach { (text, _) ->
+                            EligibilityItem(text)
+                        }
                     }
                 }
 
@@ -101,12 +106,12 @@ fun BloodDonationDash2Screen(
 }
 
 @Composable
-private fun EligibilityItem(text: String, met: Boolean) {
+private fun EligibilityItem(text: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            if (met) Icons.Default.CheckCircle else Icons.Default.Cancel,
+            Icons.Default.CheckCircle,
             contentDescription = null,
-            tint = if (met) SuccessGreen else EmergencyRed,
+            tint = SuccessGreen,
             modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))

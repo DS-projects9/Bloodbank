@@ -53,4 +53,10 @@ interface UserApi {
 
     @PATCH("api/v1/users/consents")
     suspend fun updateConsents(@Body request: UpdateConsentsRequest): ApiResponse<Map<String, Any>>
+
+    @DELETE("api/v1/users/me/reports")
+    suspend fun deleteReports(): ApiResponse<Map<String, Any>>
+
+    @DELETE("api/v1/users/me")
+    suspend fun deleteAccount(): ApiResponse<Map<String, Any>>
 }
