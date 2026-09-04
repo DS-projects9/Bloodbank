@@ -1,0 +1,17 @@
+# Build the MedKeen backend container image with Cloud Build.
+# Usage:  gcloud builds submit --config cloudbuild.yaml --project $GCP_PROJECT
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/medkeen-backend'
+      - '-f'
+      - 'backend/Dockerfile'
+      - 'backend'
+images:
+  - 'gcr.io/$PROJECT_ID/medkeen-backend'
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+timeout: 1200s

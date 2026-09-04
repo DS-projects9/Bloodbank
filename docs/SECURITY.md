@@ -1,4 +1,4 @@
-# Security & DPDP Requirements — MedVault
+# Security & DPDP Requirements — MedKeen
 
 This document is the binding security/legal spec. Every implementation task must satisfy the relevant section or cite an explicit deviation approved by Admin.
 

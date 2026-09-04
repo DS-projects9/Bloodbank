@@ -9,7 +9,7 @@ RUN apk add --no-cache git \
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/build/libs/medvault-backend-1.0.0-all.jar app.jar
+COPY --from=build /app/build/libs/medkeen-backend-1.0.0-all.jar app.jar
 EXPOSE 8080
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
 CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

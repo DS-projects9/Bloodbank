@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MedVault</string>
+    <string name="app_name">MedKeen</string>
+    <!-- Google OAuth web client ID (from Google Cloud Console). Required for "Continue with Google". -->
+    <string name="google_web_client_id">REPLACE_WITH_GOOGLE_WEB_CLIENT_ID</string>
 </resources>

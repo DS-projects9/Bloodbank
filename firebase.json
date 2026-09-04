@@ -9,7 +9,7 @@
   "functions": [
     {
       "source": "functions",
-      "codebase": "medvault",
+      "codebase": "medkeen",
       "predeploy": ["npm --prefix functions run build"]
     }
   ],

@@ -8,11 +8,11 @@ plugins {
 }
 
 android {
-    namespace = "com.medvault"
+    namespace = "com.medkeen"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.medvault"
+        applicationId = "com.medkeen"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -23,16 +23,30 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        buildConfigField("String", "BASE_URL", "\"http://127.0.0.1:8080/\"")
+        buildConfigField("Boolean", "ENABLE_CLIENT_ENCRYPTION", "true")
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "release-key.jks")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "medkeen123"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "medkeen"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "medkeen123"
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+            buildConfigField("String", "BASE_URL", "\"https://REPLACE-MEDKEEN-BACKEND.a.run.app/\"")
         }
     }
 
@@ -92,8 +106,16 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // Security (EncryptedSharedPreferences)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Biometric
     implementation("androidx.biometric:biometric:1.1.0")
+
+    // Google Identity (Credential Manager) for OAuth sign-in
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     // Accompanist
     implementation("com.google.accompanist:accompanist-permissions:0.36.0")

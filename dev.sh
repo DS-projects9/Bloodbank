@@ -9,7 +9,7 @@ docker compose up -d
 
 echo "==> Waiting for Postgres to be ready..."
 for i in $(seq 1 30); do
-    if docker compose exec -T postgres pg_isready -U medvault -d medvault >/dev/null 2>&1; then
+    if docker compose exec -T postgres pg_isready -U medkeen -d medkeen >/dev/null 2>&1; then
         echo "    Postgres is ready."
         break
     fi

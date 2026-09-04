@@ -1,4 +1,4 @@
-# Tech Stack Specifications — MedVault
+# Tech Stack Specifications — MedKeen
 
 > Single source of truth for all technology choices. **No credentials, API keys, bucket names, or endpoints may be hardcoded in source.** Everything sensitive lives in environment files / Firebase config / Secret Manager and is referenced via a typed `config` module.
 

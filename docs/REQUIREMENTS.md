@@ -1,4 +1,4 @@
-# MedVault — Requirements Sheet (build-ready)
+# MedKeen — Requirements Sheet (build-ready)
 
 > Build reference for every feature. Complements `TECHSTACK.md`, `ARCHITECTURE.md`, `SECURITY.md`.
 > **Auth = Google OAuth ONLY. No phone/OTP, no email/password, no anonymous.**

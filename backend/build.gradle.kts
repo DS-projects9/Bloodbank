@@ -5,11 +5,11 @@ plugins {
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
-group = "com.medvault"
+group = "com.medkeen"
 version = "1.0.0"
 
 application {
-    mainClass.set("com.medvault.ApplicationKt")
+    mainClass.set("com.medkeen.ApplicationKt")
 }
 
 repositories {

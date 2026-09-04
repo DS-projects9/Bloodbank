@@ -1,4 +1,4 @@
-# Architecture & Per-Module Flow — MedVault
+# Architecture & Per-Module Flow — MedKeen
 
 Applies the **MDOREHS** pattern uniformly: **M**odule → **D**ata → **O**peration → **R**outing → **E**vent Bus → **H**andover → **S**tate Matrix.
 
@@ -75,4 +75,4 @@ All cross-module sync via **Firestore snapshot listeners**; payloads serialized 
 
 ## Routing
 - Post-auth, `userRole` claim selects root stack: `PatientApp | DoctorApp | BloodBankApp | HospitalApp | AdminConsole`.
-- Deep links: `medvault://appointment/{id}`, `medvault://doc/{docId}` resolve inside the correct stack.
+- Deep links: `medkeen://appointment/{id}`, `medkeen://doc/{docId}` resolve inside the correct stack.

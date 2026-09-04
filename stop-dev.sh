@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Stops the local MedVault dev stack started by start-dev.sh:
+# Stops the local MedKeen dev stack started by start-dev.sh:
 #   - Firebase emulators
 #   - Ktor backend on :9000
 #   - adb reverse port forwarding
 #
 # Usage:  DEVICE=ZA222S4PSG ./stop-dev.sh
 
-MEDVAULT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MEDKEEN_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEVICE="${DEVICE:-ZA222S4PSG}"
 JDK21="/home/botbox/.local/jdk/jdk-21"
 ANDROID_HOME="${ANDROID_HOME:-/home/botbox/Android/Sdk}"
@@ -15,7 +15,7 @@ NODE_BIN="/home/botbox/.nvm/versions/node/v24.18.1/bin"
 export JAVA_HOME="$JDK21"
 export PATH="$JDK21/bin:$NODE_BIN:$ANDROID_HOME/platform-tools:$PATH"
 
-cd "$MEDVAULT_DIR"
+cd "$MEDKEEN_DIR"
 
 echo "==> Stopping Firebase emulators ..."
 firebase emulators:stop || true

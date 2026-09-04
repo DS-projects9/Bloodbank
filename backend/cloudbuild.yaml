@@ -1,22 +1,22 @@
-# Cloud Build config for MedVault backend.
+# Cloud Build config for MedKeen backend.
 # Builds the Docker image, pushes it to Artifact Registry, and deploys to Cloud Run.
 #
 # Prerequisites (run once):
 #   gcloud auth login
-#   gcloud config set project medvault-11c68
+#   gcloud config set project medkeen-11c68
 #   gcloud auth configure-docker asia-south1-docker.pkg.dev
-#   gcloud artifacts repositories create medvault-backend \
+#   gcloud artifacts repositories create medkeen-backend \
 #     --repository-format=docker --location=asia-south1
-#   gcloud run deploy medvault-backend --region=asia-south1 --no-traffic  # first-time skeleton
+#   gcloud run deploy medkeen-backend --region=asia-south1 --no-traffic  # first-time skeleton
 #
 # Trigger a build+deploy:
 #   gcloud builds submit --config cloudbuild.yaml backend/
 
 substitutions:
   _REGION: asia-south1
-  _REPO: medvault-backend
-  _SERVICE: medvault-backend
-  _PROJECT_ID: medvault-11c68
+  _REPO: medkeen-backend
+  _SERVICE: medkeen-backend
+  _PROJECT_ID: medkeen-11c68
 
 steps:
   - id: build
@@ -49,8 +49,8 @@ steps:
       - --allow-unauthenticated
       - --port=8080
       - --set-env-vars=GOOGLE_CLOUD_PROJECT=${_PROJECT_ID}
-      - --set-secrets=OPENAI_API_KEY=medvault-openai-key:latest,CRON_SECRET=medvault-cron-secret:latest
-      - --service-account=medvault-backend@${_PROJECT_ID}.iam.gserviceaccount.com
+      - --set-secrets=OPENAI_API_KEY=medkeen-openai-key:latest,CRON_SECRET=medkeen-cron-secret:latest
+      - --service-account=medkeen-backend@${_PROJECT_ID}.iam.gserviceaccount.com
       - --cpu=1
       - --memory=512Mi
       - --min-instances=0

@@ -48,3 +48,7 @@ firestore-debug.log
 # Local credentials (test accounts) — never commit
 passwords
 passwords*
+
+# Signing keystores — never commit
+*.jks
+*.keystore

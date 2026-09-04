@@ -1,8 +1,8 @@
 {
-  "name": "medvault",
+  "name": "medkeen",
   "version": "1.0.0",
   "private": true,
-  "description": "MedVault — DPDP-compliant health records (monorepo: app + functions).",
+  "description": "MedKeen — DPDP-compliant health records (monorepo: app + functions).",
   "scripts": {
     "typecheck": "npm --prefix functions run lint && npm --prefix app run typecheck",
     "lint": "npm --prefix functions run lint && npm --prefix app run lint",

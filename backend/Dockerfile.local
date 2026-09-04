@@ -1,8 +1,8 @@
-# Local-only Dockerfile: packages the already-built fat jar (no Gradle build).
-# Use: docker build -f Dockerfile.local -t medvault-backend:local .
+# Local validation image: reuses the prebuilt installDist (no Gradle download needed).
+# The production path uses backend/Dockerfile via Cloud Build (which has network).
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY build/libs/medvault-backend-1.0.0-all.jar app.jar
+COPY backend/build/install/medkeen-backend/ /app/
 EXPOSE 8080
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
-CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+CMD ["/app/bin/medkeen-backend"]

@@ -4,9 +4,9 @@ services:
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_DB: medvault
-      POSTGRES_USER: medvault
-      POSTGRES_PASSWORD: medvault
+      POSTGRES_DB: medkeen
+      POSTGRES_USER: medkeen
+      POSTGRES_PASSWORD: medkeen
     volumes:
       - pgdata:/var/lib/postgresql/data
 

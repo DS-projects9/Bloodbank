@@ -8,12 +8,12 @@ KEY="fakeKey"
 
 # email|role|,key:value fragment (leading comma, no outer braces)
 USERS=(
-"dr.alice@medvault.dev|DOCTOR|,\"name\":\"Dr. Alice Mehta\",\"phone\":\"+91 90000 10001\",\"city\":\"Mumbai\",\"specialization\":\"Cardiology\",\"hospitalName\":\"City Heart Institute\",\"hospitalAddress\":\"Bandra, Mumbai\",\"licenseNumber\":\"MCI-1001\",\"dob\":\"1980-05-12\",\"bloodGroup\":\"O+\""
-"dr.bob@medvault.dev|DOCTOR|,\"name\":\"Dr. Bob Nair\",\"phone\":\"+91 90000 10002\",\"city\":\"Delhi\",\"specialization\":\"General Medicine\",\"hospitalName\":\"Apollo Clinic\",\"hospitalAddress\":\"MG Road, Delhi\",\"licenseNumber\":\"MCI-1002\",\"dob\":\"1978-09-30\",\"bloodGroup\":\"A+\""
-"bb.redcross@medvault.dev|BLOOD_BANK|,\"name\":\"Red Cross Blood Bank\",\"phone\":\"+91 90000 20001\",\"city\":\"Guntur\",\"bankName\":\"Red Cross\",\"bankAddress\":\"MG Road, Guntur\",\"bloodBankLicense\":\"BB-2001\""
-"bb.lifeline@medvault.dev|BLOOD_BANK|,\"name\":\"LifeLine Blood Bank\",\"phone\":\"+91 90000 20002\",\"city\":\"Hyderabad\",\"bankName\":\"LifeLine\",\"bankAddress\":\"Banjara Hills, Hyderabad\",\"bloodBankLicense\":\"BB-2002\""
-"bb.care@medvault.dev|BLOOD_BANK|,\"name\":\"Care Blood Center\",\"phone\":\"+91 90000 20003\",\"city\":\"Bangalore\",\"bankName\":\"Care\",\"bankAddress\":\"Indiranagar, Bangalore\",\"bloodBankLicense\":\"BB-2003\""
-"patient@medvault.dev|PATIENT|,\"name\":\"Test Patient\",\"phone\":\"+91 90000 30001\",\"city\":\"Mumbai\",\"dob\":\"1995-02-10\",\"bloodGroup\":\"B+\""
+"dr.alice@medkeen.dev|DOCTOR|,\"name\":\"Dr. Alice Mehta\",\"phone\":\"+91 90000 10001\",\"city\":\"Mumbai\",\"specialization\":\"Cardiology\",\"hospitalName\":\"City Heart Institute\",\"hospitalAddress\":\"Bandra, Mumbai\",\"licenseNumber\":\"MCI-1001\",\"dob\":\"1980-05-12\",\"bloodGroup\":\"O+\""
+"dr.bob@medkeen.dev|DOCTOR|,\"name\":\"Dr. Bob Nair\",\"phone\":\"+91 90000 10002\",\"city\":\"Delhi\",\"specialization\":\"General Medicine\",\"hospitalName\":\"Apollo Clinic\",\"hospitalAddress\":\"MG Road, Delhi\",\"licenseNumber\":\"MCI-1002\",\"dob\":\"1978-09-30\",\"bloodGroup\":\"A+\""
+"bb.redcross@medkeen.dev|BLOOD_BANK|,\"name\":\"Red Cross Blood Bank\",\"phone\":\"+91 90000 20001\",\"city\":\"Guntur\",\"bankName\":\"Red Cross\",\"bankAddress\":\"MG Road, Guntur\",\"bloodBankLicense\":\"BB-2001\""
+"bb.lifeline@medkeen.dev|BLOOD_BANK|,\"name\":\"LifeLine Blood Bank\",\"phone\":\"+91 90000 20002\",\"city\":\"Hyderabad\",\"bankName\":\"LifeLine\",\"bankAddress\":\"Banjara Hills, Hyderabad\",\"bloodBankLicense\":\"BB-2002\""
+"bb.care@medkeen.dev|BLOOD_BANK|,\"name\":\"Care Blood Center\",\"phone\":\"+91 90000 20003\",\"city\":\"Bangalore\",\"bankName\":\"Care\",\"bankAddress\":\"Indiranagar, Bangalore\",\"bloodBankLicense\":\"BB-2003\""
+"patient@medkeen.dev|PATIENT|,\"name\":\"Test Patient\",\"phone\":\"+91 90000 30001\",\"city\":\"Mumbai\",\"dob\":\"1995-02-10\",\"bloodGroup\":\"B+\""
 )
 
 for line in "${USERS[@]}"; do

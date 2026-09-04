@@ -13,18 +13,18 @@ import urllib.request
 import urllib.error
 
 AUTH_EMU = "http://127.0.0.1:9099"
-PROJECT = "medvault-11c68"
+PROJECT = "medkeen-11c68"
 KEY = "fakeKey"
 PASSWORD = "Password123!"
 
 # (uid, email, display_name)
 USERS = [
-    ("uid_dr_alice",     "dr.alice@medvault.dev",     "Dr. Alice Mehta"),
-    ("uid_dr_bob",       "dr.bob@medvault.dev",       "Dr. Bob Nair"),
-    ("uid_bb_redcross",  "bb.redcross@medvault.dev",  "Red Cross Blood Bank"),
-    ("uid_bb_lifeline",  "bb.lifeline@medvault.dev",  "LifeLine Blood Bank"),
-    ("uid_bb_care",      "bb.care@medvault.dev",      "Care Blood Center"),
-    ("uid_patient",      "patient@medvault.dev",     "Test Patient"),
+    ("uid_dr_alice",     "dr.alice@medkeen.dev",     "Dr. Alice Mehta"),
+    ("uid_dr_bob",       "dr.bob@medkeen.dev",       "Dr. Bob Nair"),
+    ("uid_bb_redcross",  "bb.redcross@medkeen.dev",  "Red Cross Blood Bank"),
+    ("uid_bb_lifeline",  "bb.lifeline@medkeen.dev",  "LifeLine Blood Bank"),
+    ("uid_bb_care",      "bb.care@medkeen.dev",      "Care Blood Center"),
+    ("uid_patient",      "patient@medkeen.dev",     "Test Patient"),
 ]
 
 

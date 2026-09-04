@@ -1,1 +1,1 @@
-rootProject.name = "medvault-backend"
+rootProject.name = "medkeen-backend"
